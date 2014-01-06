@@ -27,17 +27,17 @@ repair_objs = $(dir_utility)/recovery.o $(dir_filesystem)/filesystem_utils.o $(d
                 $(dir_jerasure)/*.o
 
 ncfs: ${objs}
-	$(CC_JERASURE) $(CFLAGS_OBJ) -c $(dir_jerasure)/cauchy.c -o $(dir_jerasure)/cauchy.o
-	$(CC_JERASURE) $(CFLAGS_OBJ) -c $(dir_jerasure)/reed_sol.c -o $(dir_jerasure)/reed_sol.o
-	$(CC_JERASURE) $(CFLAGS_OBJ) -c $(dir_jerasure)/jerasure.c -o $(dir_jerasure)/jerasure.o
-	$(CC_JERASURE) $(CFLAGS_OBJ) -c $(dir_jerasure)/galois.c -o $(dir_jerasure)/galois.o
+	$(CC_JERASURE) -c $(dir_jerasure)/cauchy.c -o $(dir_jerasure)/cauchy.o $(CFLAGS_OBJ)
+	$(CC_JERASURE) -c $(dir_jerasure)/reed_sol.c -o $(dir_jerasure)/reed_sol.o $(CFLAGS_OBJ)
+	$(CC_JERASURE) -c $(dir_jerasure)/jerasure.c -o $(dir_jerasure)/jerasure.o $(CFLAGS_OBJ)
+	$(CC_JERASURE) -c $(dir_jerasure)/galois.c -o $(dir_jerasure)/galois.o $(CFLAGS_OBJ)
 	@echo "Compiling ncfs"
-	$(CC) $(CFLAGS_NCFS) -o ncfs $(objs)
+	$(CC) -o ncfs $(objs) $(CFLAGS_NCFS) 
 
 $(objs):
 	@for i in $(dir_objs); do \
 	echo "Compiling in $$i"; \
-	(cd $$i; $(CC) $(CFLAGS_OBJ) -c *.cc); done	
+	(cd $$i; $(CC) -c *.cc $(CFLAGS_OBJ)); done	
 
 setup: $(dir_utility)/setup.c
 	$(CC) $(CFLAGS_UTIL) $(dir_utility)/setup.c -o setup
