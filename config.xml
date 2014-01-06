@@ -7,36 +7,59 @@
 			<Experiment>0</Experiment>
 		</Setting>
 		<Disk>
-			<TotalDiskNumber>3</TotalDiskNumber>
-			<DataDiskNumber>2</DataDiskNumber>
+			<TotalDiskNumber>6</TotalDiskNumber>
+			<DataDiskNumber>4</DataDiskNumber>
 			<ChunkSize>8192</ChunkSize>
 			<RaidType>5</RaidType>
 			<DiskSetting>
 				<Disk1>
 					<DevName>/dev/loop1</DevName>
-					<TotalSize>20971520</TotalSize>
+					<TotalSize>104857600</TotalSize>
 					<FreeOffset>0</FreeOffset>
-					<FreeSize>20971520</FreeSize>
+					<FreeSize>104857600</FreeSize>
 				</Disk1>
 				<Disk2>
 					<DevName>/dev/loop2</DevName>
-					<TotalSize>20971520</TotalSize>
+					<TotalSize>104857600</TotalSize>
 					<FreeOffset>0</FreeOffset>
-					<FreeSize>20971520</FreeSize>
+					<FreeSize>104857600</FreeSize>
 				</Disk2>
 				<Disk3>
 					<DevName>/dev/loop3</DevName>
-					<TotalSize>20971520</TotalSize>
+					<TotalSize>104857600</TotalSize>
 					<FreeOffset>0</FreeOffset>
-					<FreeSize>20971520</FreeSize>
+					<FreeSize>104857600</FreeSize>
 				</Disk3>
-
+				<Disk4>
+					<DevName>/dev/loop4</DevName>
+					<TotalSize>104857600</TotalSize>
+					<FreeOffset>0</FreeOffset>
+					<FreeSize>104857600</FreeSize>
+				</Disk4>
+				<Disk5>
+					<DevName>/dev/loop5</DevName>
+					<TotalSize>104857600</TotalSize>
+					<FreeOffset>0</FreeOffset>
+					<FreeSize>104857600</FreeSize>
+				</Disk5>
+				<Disk6>
+					<DevName>/dev/loop6</DevName>
+					<TotalSize>104857600</TotalSize>
+					<FreeOffset>0</FreeOffset>
+					<FreeSize>104857600</FreeSize>
+				</Disk6>
+				<Disk7>
+					<DevName>/dev/loop7</DevName>
+					<TotalSize>104857600</TotalSize>
+					<FreeOffset>0</FreeOffset>
+					<FreeSize>104857600</FreeSize>
+				</Disk7>
 			</DiskSetting>
 		</Disk>
 	</FileSystem>
 	<Cache>
 		<ThreadPool>
-			<NumOfThread>3</NumOfThread>
+			<NumOfThread>7</NumOfThread>
 		</ThreadPool>
 		<FileCache>
 			<BufferSize>2097152</BufferSize>
