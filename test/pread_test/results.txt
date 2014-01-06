@@ -1,0 +1,36 @@
+Settings:
+Number of nodes: 4
+Connection: networked devices (NASs) connected to gateway through AoE
+Data size of each node: 1GB
+
+Measurements:
+(Note 1: about pread type: large_pread means pread size equals to cache size; small_pread means pread size equals to block size 
+(Note 2: fraction = fraction of data required)
+(Note 3: elapsed time = time used in second)
+(Note 4: pread count = number of pread function is called)
+(Note 5: data count = total data read in GB)
+
+For cache size = 10MB; block size = 4KB
+(pread type)	(fraction)	(elapsed time)	(pread count)	(data count)
+large_pread	1	58.86	408	4
+small_pread	1	37.94	1044480	4
+small_pread	2	144.04	522240	2
+small_pread	3	85.80	348432	1.33
+small_pread	4	63.56	261120	1
+small_pread	5	52.06	208896	0.8
+small_pread	6	33.55	174216	0.66
+small_pread	7	36.29	149328	0.57
+small_pread	8	29.46	130560	0.5
+
+For cache size = 5MB; block size = 4KB
+(pread type)    (fraction)      (elapsed time)  (pread count)   (data count)                                
+large_pread     1       64.58   816     4  
+small_pread     1       38.79   1044480 4  
+small_pread     2       143.87  522240  2  
+small_pread     3       86.06   348432  1.33  
+small_pread     4       63.60   261120  1
+small_pread     5       52.16   208896  0.8
+small_pread     6       34.45   174216  0.66
+small_pread     7       36.35   149328  0.57
+small_pread     8       29.48   130560  0.5
+

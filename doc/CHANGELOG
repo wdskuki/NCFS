@@ -1,0 +1,23 @@
+Change Log
+
+From version 1.0.2 to 1.1.0
+
+- Support large chunk size that is a multiple of 4KB. Note that we do not
+  support some file sizes for a file being written to NCFS. Please refer to
+  the user guide for details.
+- The configuration is now stored in XML format.
+- A standalone recovery utility is now used to support the recovery operation.
+  See the user guide for details. 
+- Bugs have been fixed.
+
+From version 1.0.1 to 1.0.2
+
+- Updated MBR coding scheme to support generic (n,k) MDS property. The type
+  number for this scheme is still 1000.
+- Added a generic Reed-Solomon coding scheme which supports generic (n,k) MDS
+  property. The type number for this scheme is 3000.
+
+From version 1.0.0 to 1.0.1
+
+- Renamed CodingStorageLayer class to CodingLayer class.
+- Renamed DiskLayer class to StorageLayer class.

@@ -1,0 +1,518 @@
+/*
+ * netcodec.cc
+ * - network coding engine
+ */
+
+//#include <click/config.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "netcodec.hh"
+
+//CLICK_DECLS
+
+/*
+ * Initialize all global variables
+ */
+bool CodeBlock::is_data_ = true;
+int CodeBlock::symb_size_ = 4;
+static unsigned int poly[9] = {1,1,1,0,0,0,0,1,1};	// primitive polynomial
+GaloisField CodeBlock::gf_(8, poly);		// initialize the galois field
+GaloisField NetCodec::gf_(8, poly);		// initialize the galois field
+/***************************************************************************
+ * Implementation of CodeBlock
+ ***************************************************************************/
+/*
+ * Constructor - initialize a zero-valued codeblock
+ *
+ * @param k - number of coefficients
+ */
+CodeBlock::CodeBlock(int k) {
+	first_ = -1;
+	k_ = k;	
+	coeff_ = new uint8_t[k_];
+	memset(coeff_, 0, k_);
+	if (is_data_) {
+		symb_ = new uint8_t[symb_size_];
+		memset(symb_, 0, symb_size_);
+	} else {
+		symb_ = NULL;
+	}
+}
+
+/*
+ * Constructor
+ * 
+ * @param k - number of coefficients
+ * @param coeff - coefficients
+ * @param symb - coded symbols (default = NULL)
+ * @param len - number of coded symbols in data, which could be smaller than
+ * code datasize (default = 0)
+ */
+CodeBlock::CodeBlock(int k, uint8_t* coeff, uint8_t* symb, int len)
+{
+	int i;
+	first_ = -1;
+	k_ = k;
+	coeff_ = new uint8_t[k_];
+	for (i=0; i<k_; ++i) {
+		coeff_[i] = coeff[i];
+		if (first_ < 0 && coeff[i] != 0) {
+			first_ = i;
+		}
+	}
+	
+	// malloc	
+	if (is_data_) {						// data to be processed
+		// error checking
+		if (symb_size_ < len) {		
+			fprintf(stderr, "ERR: input data size (%u) too large\n", len);
+			symb_ = NULL; 	
+		} else {
+			symb_ = new uint8_t[symb_size_];
+			for (i=0; i<len; ++i) {
+				symb_[i] = symb[i];
+			}
+			for (i=len; i<symb_size_; ++i) {		
+				// pad the remaining bytes with 0
+				symb_[i] = 0;
+			}
+		}
+	} else {							// no need to process data
+		symb_ = NULL;
+	}
+}
+
+/*
+ * Destructor
+ */
+CodeBlock::~CodeBlock() {
+	delete[] coeff_;
+	if (symb_ != NULL) {
+		delete[] symb_;
+	}
+}
+
+/*
+ * Addition: this += h * cb (requiring that both "this" and cb are with
+ * respect to the same set of original packets)
+ *
+ * @param cb - codeblock
+ * @param h - coefficient constant (single value)
+ */
+void
+CodeBlock::add(CodeBlock* cb, uint8_t h) {
+	int i;
+
+	// update every coefficient
+	for (i=0; i<k_; ++i) {	
+		coeff_[i] = gf_.add(coeff_[i], gf_.mul(h, cb->coeff_[i])); 
+	}
+
+	// update every data symbol
+	if (symb_ != NULL) {
+		for (i=0; i<symb_size_; ++i) {
+			symb_[i] = gf_.add(symb_[i], gf_.mul(h, cb->symb_[i]));
+		}
+	}
+	/**/
+	// update first_
+
+	first_ = -1;
+	for (i=0; i<k_; ++i) {
+		if (coeff_[i] != 0) {
+			first_ = i;
+			break;
+		}
+	}
+
+}
+
+/*
+ * normalize the first coefficient of the block to 1
+ */
+void
+CodeBlock::normalize() {
+	uint8_t a;			// value of the first non-zero coefficient
+	int i;
+	if (first_ < 0) {		// unable to normalize
+		return;
+	}	
+	// normalize the coefficients
+	a = coeff_[first_];
+	for (i=first_; i<k_; ++i) {
+		coeff_[i] = gf_.div(coeff_[i], a);
+	}
+	// also normalize the data if necessary
+	if (is_data_) {
+		for (i=0; i<symb_size_; ++i) {
+			symb_[i] = gf_.div(symb_[i], a);
+		}
+	}
+}
+
+/*
+ * print the codeblock
+ */
+void
+CodeBlock::print() {
+
+	int i;
+ 	/* 
+	printf("coeff = [");
+	for (i=0; i<k_; ++i) {
+		if (i < k_ - 1) {
+			printf("%u ", coeff_[i]);
+		} else {
+			printf("%u] ", coeff_[i]);
+		}
+	}
+	*/
+  //	printf("\n");
+	//printf("symb_size =%d ", symb_size_ );
+	//printf("\n");	
+	
+	printf("  symbol = [ ");
+	for (i=0; i<symb_size_; ++i) {
+		if (i < symb_size_ - 1) {
+			printf("%u ", symb_[i]);
+		} else {
+			printf("%u ]\n", symb_[i]);
+		}
+	}	
+	
+}
+
+CodeBlock * 
+CodeBlock::copy(){
+	CodeBlock * cb_copy = new CodeBlock(k_);	
+	// data members
+	cb_copy->first_=first_;						// index of the first non-zero coefficient
+	cb_copy->k_=k_;							// number of coefficients
+	for (int i=0;i<k_;i++){	
+		cb_copy->coeff_[i]=coeff_[i];				// list of coefficients	
+	}
+	for (int j=0;j<symb_size_;j++){	
+		cb_copy->symb_[j]=symb_[j];				// an array of coded symbols
+	}
+return cb_copy;
+}
+
+/***************************************************************************
+ * Implementation of CodeMatrix
+ ***************************************************************************/
+/*
+ * Constructor
+ * 
+ * @param k - size of the matrix
+ */
+CodeMatrix::CodeMatrix(int k) {
+	int i;
+	k_ = k;
+	rank_ = 0;
+	cb_ = new CodeBlock*[k];
+	for (i=0; i<k; ++i) {
+		cb_[i] = NULL;
+	}
+	
+}
+
+/*
+ * Add an independent encoded codeblock to the codematrix. Change the
+ * codeblock to the * normalized form. Drop the codeblock if it doesn't
+ * increase the rank.
+ *
+ * @param block - codeblock to be added
+ * @return - true if the codeblock can be successfully added (i.e.,
+ * innovative), false otherwise.
+ */
+bool
+CodeMatrix::addEncodedBlock(CodeBlock* block) {		
+	CodeBlock * new_block = new CodeBlock(k_);
+	new_block =block->copy();
+	if (rank_ == 0) {					// no codeblock exists
+		new_block->normalize();
+		cb_[rank_++] = new_block;
+		return true;
+	} 
+	
+	else if (rank_ == k_)	{			// already reach the maximum
+		return false;
+	} 
+
+
+	else {							// 1 <= rank < k_
+		int i, j;		
+		for (i=0; i<rank_; ++i) {			
+			if (cb_[i]->first() == new_block->first()) {
+				new_block->add(cb_[i], new_block->coeff(new_block->first()));			
+			} 			
+			else if (new_block->first() >= 0 && 
+					cb_[i]->first() > new_block->first()) {
+				for (j=rank_; j>i; --j) {
+					cb_[j] = cb_[j-1];
+				}
+				new_block->normalize();
+				cb_[i] = new_block->copy();
+				rank_++;
+				return true;				
+			}			
+			// no need to handle if cb_[i]->first() < new_block->first(), since
+			// the coefficient of the new_block->coeff(cb_[i]->first()) == 0			
+			if (new_block->first() < 0) {		// reduced to zero new_block, drop
+				return false;	
+			}			
+		}		
+		// new_block is innovative
+		new_block->normalize();
+		cb_[rank_++] = new_block;
+		return true;
+	}//else
+	// should never reach here
+	return false;
+}
+
+/*
+ * Store an independent encoded codeblock to the enc_matrix_. 
+ * @param block - codeblock to be stored
+ * @return - true if the codeblock can be successfully stored , 
+ * false otherwise.
+ */
+bool
+CodeMatrix::storeEncodedBlock(CodeBlock* block) {
+	cb_[rank_++] = block;
+	return true;
+	// should never reach here
+	return false;
+}
+
+
+
+/*
+ * reset the matrix
+ */
+void
+CodeMatrix::reset() {
+	int i; 
+	rank_ = 0;
+	for (i=0; i<k_; ++i) {
+		delete cb_[i]; 
+		cb_[i] = NULL;
+	}
+}
+
+/*
+ * print the matrix
+ */
+void
+CodeMatrix::print() {
+	int i;	
+	for (i=0; i<rank_; ++i) {
+		printf("row %2u ", i+1); 
+		cb_[i]->print();
+	}
+	printf("\n");
+}
+
+/***************************************************************************
+ * Implementation of NetCodec (Network coding engine)
+ ***************************************************************************/
+/*
+ * Constructor
+ *
+ * @param k - size of decoding matrix 
+ * @param symb_size - size of symbols (global variable)
+ */
+NetCodec::NetCodec(int k,int e) {
+	k_ = k;
+	e_ = e;
+	for (int i = 0; i< k_; i++)RS_coeff_.push_back(i+1);
+	for (int j = 0; j< e_; j++)RS_power_.push_back(j);
+	dec_list_.clear();
+	orig_matrix_ = new CodeMatrix(k_);
+	dec_matrix_ = new CodeMatrix(k_);
+	enc_matrix_ = new CodeMatrix(e_);
+}
+
+/*
+ * Add (native) original data packets as code blocks
+ * 
+ * @param data - original data stream to be encoded
+ * @param len - number of data bytes
+ */
+void
+NetCodec::addNativePacket(uint8_t* data, int len) {
+	CodeBlock* block; 	
+	uint8_t coeff[k_]; 
+
+	memset(coeff, 0, k_); 
+	coeff[orig_matrix_->rank()] = 1;
+	block = new CodeBlock(k_, coeff, data, len);
+	if (!orig_matrix_->addEncodedBlock(block)) {
+		fprintf(stderr, "ERR: unexpected - native packets can't be added\n");
+	}
+}
+
+/*
+ * Add coded packets as code blocks
+ * 
+ * @param coeff - coefficient vector
+ * @param data - original data stream to be encoded
+ * @param len - number of data bytes
+ * @return true - if the coded packets are innovative, false otherwise.
+ */
+bool
+NetCodec::addCodedPacket(uint8_t* coeff, uint8_t* data, int len) {
+	bool ret;
+	CodeBlock* block = new CodeBlock(k_, coeff, data, len);
+	ret = orig_matrix_->addEncodedBlock(block);
+	if (!ret) {		// non-innovative
+		delete block;
+	}
+	return ret;
+}
+
+/*
+ * encode the given data stream and create a new codeblock using a random
+ * linear combination
+ *
+ * @return - the encoded Codeblock
+ */
+CodeBlock* 
+NetCodec::encode(int encoded_block_index) {
+	CodeBlock* block;			// encoded codeblock	
+	uint8_t h;					// random coefficient
+	int i;
+	int bottom_num;
+	int exponent;
+	// if empty, return NULL
+	if (orig_matrix_->rank() == 0) {
+		return NULL;
+	}
+	// the codeblock is a random linear comb of existing codeblocks
+	block = new CodeBlock(k_);
+	for (i=0; i < orig_matrix_->rank(); ++i) {
+		//h = rand() % 255;			// generate a random coefficient	
+		bottom_num = RS_coeff_[i];
+		exponent = RS_power_[encoded_block_index];
+		h=gf_.exp(uint8_t(bottom_num),exponent);          //RS coding
+		block->add(orig_matrix_->cb(i), h);
+	}
+	
+
+		
+	return block;
+}
+
+/*
+ * store all the codeblocks into the enc_matrix
+ */ 
+void 
+NetCodec::store_encode(CodeBlock* block){
+	enc_matrix_->storeEncodedBlock(block);
+}
+
+
+/*
+ * decode given codeblocks
+ */
+void 
+NetCodec::decode(CodeBlock* block) {
+	dec_matrix_->addEncodedBlock(block);
+}
+
+/*
+ * get the decoded original data
+ *
+ * @return ret_data - the returned original data stream
+ */
+void
+NetCodec::getNativePacket(uint8_t* ret_data) {
+	// if no decoded packets are available
+	if (!isDecodable()) {
+		return;
+	}
+	// actually decode the packets, if the decode list is empty
+	if (dec_list_.empty()) {
+		// apply Gaussian elimination 
+		// (note that the decode matrix is already in row echelon form)
+		CodeBlock* orig_data[k_];			// original data block
+		int i, row, col;
+		for (i=0; i<k_; ++i) {	
+			orig_data[i] = new CodeBlock(k_);
+		}	
+		for (i=0; i<k_; ++i) {
+			row = k_ - 1 - i;
+			orig_data[row]->add(dec_matrix_->cb(row), 1);
+			for (col=row+1; col<k_; ++col) {
+				orig_data[row]->add(orig_data[col], 
+						dec_matrix_->coeff(row, col));
+			}
+		}
+		for (i=0; i<k_; ++i) {
+			dec_list_.push_back(orig_data[i]);
+		}	
+		// reset the decode matrix
+		dec_matrix_->reset();
+	}
+	// now, return the data
+	CodeBlock* block = dec_list_.front(); 
+	dec_list_.erase(dec_list_.begin()); 
+	if (block->symb() != NULL) {
+		memcpy(ret_data, block->symb(), block->symb_size()); 
+	} else {
+		memset(ret_data, 0, block->symb_size());
+	}
+
+	// delete the block
+	delete block; 
+}
+
+
+/*
+ * Return true if the network coding engine is able to decode some packets
+ */
+bool
+NetCodec::isDecodable() {
+	return (!dec_list_.empty() || dec_matrix_->rank() == k_); 
+}
+
+
+/*
+ * Reset the data structures in the network coding engine
+ */
+void
+NetCodec::reset() {
+	dec_list_.clear();
+	orig_matrix_->reset();
+	dec_matrix_->reset();
+}
+
+/*
+ * print the information about network coding engine
+ */
+void
+NetCodec::print() { 
+	for (int i = 0; i< k_; i++)printf("\nRS coefficient:%d\n", RS_coeff_[i]);
+	for (int j = 0; j< e_; j++)printf("\nRS power:%d\n", RS_power_[j]); 
+	
+	/*
+  printf("\n");
+  printf("dec_matrix:");
+  printf("\n");
+	dec_matrix_->print();  
+  printf("\n");
+  printf("orig_matrix:");
+  printf("\n");
+  orig_matrix_->print();  
+  printf("\n");
+  printf("enc_matrix:");
+  printf("\n");
+	enc_matrix_->print();
+	printf("\n");
+	*/
+}
+
+
+//CLICK_ENDDECLS
+//ELEMENT_PROVIDES(NetCodec)

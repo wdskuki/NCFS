@@ -1,0 +1,25 @@
+Settings:
+With page cache NOT cleared
+Number of nodes: 1
+Connection: Local loop device (/dev/loop1)
+Data size of each node: 2GB
+
+Measurements:
+(Note 1: about pread type: large_pread means pread size equals to cache size; small_pread means pread size equals to block size 
+(Note 2: fraction = fraction of data required)
+(Note 3: elapsed time = time used in second)
+(Note 4: pread count = number of pread function is called)
+(Note 5: data count = total data read in GB)
+
+For cache size = 5MB; block size = 4KB
+(pread type)    (fraction)      (elapsed time)  (pread count)   (data count)
+large_pread     1       23.05   409     2  
+small_pread     1       2.97	523520	2  
+small_pread     2       3.32	261760  1  
+small_pread     3       2.30	174643  0.66  
+small_pread     4       1.70	130880  0.5
+small_pread     5       3.99	104704  0.4
+small_pread     6       3.33	87526	0.33
+small_pread     7       0.96	74847	0.28
+small_pread     8       2.50	65440	0.25
+

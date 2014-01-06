@@ -1,0 +1,5 @@
+<<<<<<< .mine
+7/12/2010	2200	Edited add_tab of Disk_Detail to dynamically create overall_child, Request an update of diskusage report upon create.
+7/12/2010	2318	Use original file if the user only picks a folder when downloading, raid_setting is used instead of raid_setting.txt
+=======
+7/12/2010	2200	Edited add_tab of Disk_Detail to dynamically create overall_child, Request an update of diskusage report upon create.>>>>>>> .r91

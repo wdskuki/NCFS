@@ -1,0 +1,38 @@
+(all run as root)
+
+bash setup.sh 4 15
+dd if=/dev/zero of=file05.img bs=1M count=15
+losetup -d /dev/loop5
+losetup /dev/loop5 file05.img
+dd if=/dev/urandom of=test bs=1M count=30
+
+(from now on, we use two terminals)
+[terminal 1]
+./ecfs -d rootdir/ mountdir/
+
+[terminal 2]
+cp test mountdir/
+cp mountdir/test test_b4dead
+
+[terminal 1]
+(set disk 0 to be failed)
+set 0 1
+(print out the current status)
+print
+
+[terminal 2]
+cp mountdir/test test_dead
+
+[terminal 1]
+(start recovery process)
+recover /dev/loop5
+(print out the current status)
+print
+
+[terminal 2]
+cp mountdir/test test_recover
+fusermount -u mountdir/
+(verify files)
+diff test test_b4dead
+diff test test_dead
+diff test test_recover

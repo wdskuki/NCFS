@@ -1,0 +1,24 @@
+Step 1: Setup
+> sudo ./setup4test.sh
+(This will setup a loop device /dev/loop0 of size 10MB filled with zero.)
+
+Step 2: Make
+> make
+(This will compile the objects and the cache_test program.)
+
+Step 3: Run cache_test
+> sudo ./cache_test <read/write/both> <number of blocks>
+(This will run the cache_test program.)
+
+<write/read/both> = either string "write", "read" or "both"
+"write" for writing <number of blocks> blocks to /dev/loop0. (See below for block content)
+"read" for reading <number of blocks> blocks from /dev/loop0 and write the data to "test_output.dat"
+"both" for first writing and then reading.
+
+cache_test program flow (write and read):
+1. Create a disk cache.
+2. Write <number of blocks> blocks to the cache. Each block is default 4096 bytes. The first block is filled by "A", the second is filled by "B", and so on recursively from "A" to "Z".
+3. Validate the block sequence on the device
+4. Read <number of blocks> blocks from /dev/loop0 one by one, and write the blocks to file "test_output.dat".
+5. Validate the output file.
+6. Clear the disk cache.
