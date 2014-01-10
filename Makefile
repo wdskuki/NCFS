@@ -85,4 +85,4 @@ clean:
 	(rm -f $$i); done
 	@echo "Deleting testCoding"
 	rm -f testCoding
-	rm -f $(dir_coding)/testCoding.o
+	rm -f $(dir_utility)/testCoding.o
