@@ -5,7 +5,6 @@ CFLAGS_OBJ = -g -Wall `pkg-config fuse --cflags`
 CFLAGS_UTIL = -g -Wall
 LIB = -lpthread 
 
-
 dir_src = src
 dir_filesystem = $(dir_src)/filesystem
 dir_config = $(dir_src)/config
@@ -16,6 +15,7 @@ dir_utility= $(dir_src)/utility
 dir_network = $(dir_src)/network
 dir_gui = $(dir_src)/gui
 dir_jerasure = $(dir_src)/jerasure
+
 
 #dir_objs defines the directory of objects. objs defines object paths.
 dir_objs = $(dir_filesystem) $(dir_cache) $(dir_coding) $(dir_storage) $(dir_gui) $(dir_network) $(dir_config) $(dir_utility)
