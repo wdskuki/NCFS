@@ -600,7 +600,7 @@ int ncfs_read(const char *path, char *buf, size_t size, off_t offset,
 						     sizeof(struct
 							    data_block_info),
 						     addr_offset);
-
+			    
 			//calculte size of read for this block
 			read_size = size - bytes_read_already;
 			if (read_size > (size_t) block_size) {

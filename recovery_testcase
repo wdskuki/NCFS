@@ -8,7 +8,7 @@ dd if=/dev/urandom of=test bs=1M count=30
 
 (from now on, we use two terminals)
 [terminal 1]
-./ecfs -d rootdir/ mountdir/
+./ncfs -d rootdir/ mountdir/
 
 [terminal 2]
 cp test mountdir/
