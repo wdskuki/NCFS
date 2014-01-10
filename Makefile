@@ -5,6 +5,7 @@ CFLAGS_OBJ = -g -Wall `pkg-config fuse --cflags`
 CFLAGS_UTIL = -g -Wall
 LIB = -lpthread 
 
+
 dir_src = src
 dir_filesystem = $(dir_src)/filesystem
 dir_config = $(dir_src)/config
