@@ -717,7 +717,7 @@ int CacheLayer::FileInfoWrite(int id, const char *buf, long long size,
  * @param id: id of the FileInfoCache (we use file descriptor for this)
  * @param buf: data buffer to be read from cache
  * @param size: size of the buffer
- * @param offset offset of data on the file to be read
+ * @param offset: offset of data on the file to be read
  * @return: size of successful read
  */
 int CacheLayer::FileInfoRead(int id, char *buf, long long size,

@@ -22,9 +22,21 @@ objs = $(dir_filesystem)/ncfs.o $(dir_filesystem)/filesystem_utils.o $(dir_cache
 		$(dir_network)/connection.o $(dir_network)/network.o $(dir_gui)/*.o $(dir_config)/*.o \
 		$(dir_jerasure)/reed_sol.o $(dir_jerasure)/cauchy.o $(dir_jerasure)/jerasure.o $(dir_jerasure)/galois.o
 
-repair_objs = $(dir_utility)/recovery.o $(dir_filesystem)/filesystem_utils.o $(dir_cache)/*.o $(dir_storage)/*.o \
+# #wds begin
+# dir_objs := $(dir_objs) $(dir_coding)/test
+# objs := $(objs) $(dir_coding)/test/testCoding.o
+
+testCoding_objs = $(dir_utility)/testCoding.o $(dir_filesystem)/filesystem_utils.o $(dir_cache)/*.o $(dir_storage)/*.o \
                 $(dir_coding)/*.o $(dir_network)/*.o $(dir_gui)/*.o $(dir_config)/*.o \
                 $(dir_jerasure)/*.o
+# #wds: end
+
+
+repair_objs = $(dir_utility)/recovery.o $(dir_filesystem)/filesystem_utils.o $(dir_cache)/*.o $(dir_storage)/*.o \
+                $(dir_coding)/coding.o $(dir_network)/*.o $(dir_gui)/*.o $(dir_config)/*.o \
+                $(dir_jerasure)/*.o
+
+
 
 ncfs: ${objs}
 	$(CC_JERASURE) -c $(dir_jerasure)/cauchy.c -o $(dir_jerasure)/cauchy.o $(CFLAGS_OBJ)
@@ -45,11 +57,22 @@ setup: $(dir_utility)/setup.c
 recover: $(dir_utility)/recovery.cc 
 	$(CC) $(CFLAGS_UTIL) $(repair_objs) -o recover  $(LIB)
 
+testCoding: $(dir_utility)/testCoding.cc
+#	$(CC) $(CFLAGS_UTIL) -c $(dir_coding)/testCoding.cc -o $(dir_coding)/testCoding.o
+	$(CC) $(CFLAGS_UTIL) $(testCoding_objs) -o testCoding $(LIB)
+
+
+#$(dir_coding)/test/testCoding.o: $(dir_coding)/test/testCoding.cc $(dir_coding)/test/testCoding.hh
+#	$(CC) -c $(dir_coding)/test/testCoding.cc -o $(dir_coding)/test/testCoding.o
+
 remap: $(dir_utility)/remap.c
 	$(CC) $(CFLAG_UTIL) $(dir_utility)/remap.c -o remap
 
 benchmark: $(dir_utility)/benchmark.c
 	$(CC) $(CFLAG_UTIL) $(dir_utility)/benchmark.c -o benchmark
+
+
+
 
 clean:
 	@echo "Deleting ncfs"
@@ -60,3 +83,6 @@ clean:
 	@for i in $(objs); do \
 	echo "Deleting $$i"; \
 	(rm -f $$i); done
+	@echo "Deleting testCoding"
+	rm -f testCoding
+	rm -f $(dir_coding)/testCoding.o
