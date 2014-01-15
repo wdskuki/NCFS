@@ -16,6 +16,7 @@ dir_network = $(dir_src)/network
 dir_gui = $(dir_src)/gui
 dir_jerasure = $(dir_src)/jerasure
 
+
 #dir_objs defines the directory of objects. objs defines object paths.
 dir_objs = $(dir_filesystem) $(dir_cache) $(dir_coding) $(dir_storage) $(dir_gui) $(dir_network) $(dir_config) $(dir_utility)
 objs = $(dir_filesystem)/ncfs.o $(dir_filesystem)/filesystem_utils.o $(dir_cache)/cache.o $(dir_storage)/storage.o $(dir_coding)/coding.o \

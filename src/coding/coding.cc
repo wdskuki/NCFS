@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/time.h>
- 
+
 extern "C" {
 #include "../jerasure/galois.h"
 #include "../jerasure/jerasure.h"
@@ -709,8 +709,6 @@ struct data_block_info CodingLayer::encoding_raid5(const char *buf, int size)
 	//implement disk write algorithm here.
 	//here use raid5: stripped block allocation plus distributed parity.
 	//approach: calculate xor of the block on all data disk
-
-	//find and omit the parity block
 	for (i = 0; i < disk_total_num; i++) {
 		if (i ==
 		    (disk_total_num - 1 -
