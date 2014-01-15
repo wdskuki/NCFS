@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/time.h>
- 
+
 extern "C" {
 #include "../jerasure/galois.h"
 #include "../jerasure/jerasure.h"
@@ -709,8 +709,6 @@ struct data_block_info CodingLayer::encoding_raid5(const char *buf, int size)
 	//implement disk write algorithm here.
 	//here use raid5: stripped block allocation plus distributed parity.
 	//approach: calculate xor of the block on all data disk
-
-	//find and omit the parity block
 	for (i = 0; i < disk_total_num; i++) {
 		if (i ==
 		    (disk_total_num - 1 -
@@ -827,8 +825,6 @@ struct data_block_info CodingLayer::encoding_raid5(const char *buf, int size)
 	return block_written;
 }
 
-
-
 /*
  * raid6_encoding: RAID 6: fault tolerance by stripped parity (type=6)
  *
@@ -837,7 +833,6 @@ struct data_block_info CodingLayer::encoding_raid5(const char *buf, int size)
  *
  * @return: assigned data block: disk id and block number.
  */
-
 struct data_block_info CodingLayer::encoding_raid6(const char *buf, int size)
 {
 	int retstat, disk_id, block_no, disk_total_num, block_size;
@@ -1008,220 +1003,6 @@ struct data_block_info CodingLayer::encoding_raid6(const char *buf, int size)
 
 	return block_written;
 }
-
-//Modified by Dongsheng Wei on Jan. 12, 2014 begin.
-// struct data_block_info CodingLayer::encoding_raid6(const char *buf, int size)
-// {
-// 	int retstat, disk_id, block_no, disk_total_num, block_size;
-// 	int size_request, block_request, free_offset;
-// 	struct data_block_info block_written;
-// 	int i, j;
-// 	int parity_disk_id, code_disk_id;
-// 	char *buf2, *buf3, *buf_read;
-// 	char temp_char;
-// 	int data_disk_coeff;
-
-// 	struct timeval t1, t2, t3;
-// 	double duration;
-
-// 	disk_total_num = NCFS_DATA->disk_total_num;
-// 	block_size = NCFS_DATA->chunk_size;
-
-// 	size_request = fileSystemLayer->round_to_block_size(size);
-// 	block_request = size_request / block_size;
-
-// 	//implement disk write algorithm here.
-// 	//here use raid6: stripped block allocation plus distributed parity and distributed RS code.
-
-// 	for (i = 0; i < disk_total_num; i++) {
-// 		//mark blocks of code_disk and parity_disk
-// 		if ((i ==
-// 		     (disk_total_num - 1 -
-// 		      (NCFS_DATA->free_offset[i] % disk_total_num)))
-// 		    || (i ==
-// 			(disk_total_num - 1 -
-// 			 ((NCFS_DATA->free_offset[i] + 1) % disk_total_num)))) {
-// 			(NCFS_DATA->free_offset[i])++;
-// 			(NCFS_DATA->free_size[i])--;
-// 		}
-// 	}
-
-// 	block_no = 0;
-// 	disk_id = -1;
-// 	free_offset = NCFS_DATA->free_offset[0];
-// 	for (i = disk_total_num - 1; i >= 0; i--) {
-// 		if ((block_request <= (NCFS_DATA->free_size[i]))
-// 		    && (free_offset >= (NCFS_DATA->free_offset[i]))) {
-// 			disk_id = i;
-// 			block_no = NCFS_DATA->free_offset[i];
-// 			free_offset = block_no;
-// 		}
-// 	}
-
-// 	//get block from space_list if no free block available
-// 	if (disk_id == -1) {
-// 		if (NCFS_DATA->space_list_head != NULL) {
-// 			disk_id = NCFS_DATA->space_list_head->disk_id;
-// 			block_no = NCFS_DATA->space_list_head->disk_block_no;
-// 			fileSystemLayer->space_list_remove(disk_id, block_no);
-// 		}
-// 	}
-
-// 	if (disk_id == -1) {
-// 		printf("***get_data_block_no: ERROR disk_id = -1\n");
-// 	} else {
-// 		buf_read = (char *)malloc(sizeof(char) * size_request);
-// 		buf2 = (char *)malloc(sizeof(char) * size_request);
-// 		memset(buf2, 0, size_request);
-// 		buf3 = (char *)malloc(sizeof(char) * size_request);
-// 		memset(buf3, 0, size_request);
-
-// 		NCFS_DATA->free_offset[disk_id] = block_no + block_request;
-// 		NCFS_DATA->free_size[disk_id]
-// 		    = NCFS_DATA->free_size[disk_id] - block_request;
-
-// 		code_disk_id = disk_total_num - 1 - (block_no % disk_total_num);
-
-// 		parity_disk_id =
-// 		    disk_total_num - 1 - ((block_no + 1) % disk_total_num);
-// 		if (NCFS_DATA->run_experiment == 1) {
-// 			gettimeofday(&t1, NULL);
-// 		}
-
-// 		//Cache Start
-// 		retstat =
-// 		    cacheLayer->DiskRead(disk_id, buf_read, size_request,
-// 					 block_no * block_size);
-// 		//Cache End
-
-// 		if (NCFS_DATA->run_experiment == 1) {
-// 			gettimeofday(&t2, NULL);
-// 		}
-
-// 		//calculate the xor difference between new buf and origin buf
-// 		for (j = 0; j < size_request; j++) {
-// 			buf_read[j] = buf[j] ^ buf_read[j];
-// 		}
-
-
-// 		//Cache Start
-// 		retstat =
-// 		    cacheLayer->DiskRead(parity_disk_id, buf2, size_request,
-// 					 block_no * block_size);
-// 		//Cache End
-// 		for (j = 0; j < size_request; j++) {
-// 			buf2[j] = buf2[j] ^ buf_read[j];
-// 		}
-
-
-// 		//Cache Start
-// 		retstat =
-// 		    cacheLayer->DiskRead(code_disk_id, buf3, size_request,
-// 					 block_no * block_size);
-// 		//Cache End
-		
-
-
-// /*************************************************************/
-// 		// Cache Start
-// 		retstat =
-// 		    cacheLayer->DiskWrite(disk_id, buf, size,
-// 					  block_no * block_size);
-// 		// Cache End
-
-// 		if (NCFS_DATA->run_experiment == 1) {
-// 			gettimeofday(&t2, NULL);
-// 		}
-
-// 		code_disk_id = disk_total_num - 1 - (block_no % disk_total_num);
-// 		parity_disk_id =
-// 		    disk_total_num - 1 - ((block_no + 1) % disk_total_num);
-
-// 		for (i = 0; i < disk_total_num; i++) {
-// 			if ((i != parity_disk_id) && (i != code_disk_id)) {
-
-// 				if (NCFS_DATA->run_experiment == 1) {
-// 					gettimeofday(&t1, NULL);
-// 				}
-// 				//Cache Start
-// 				retstat = cacheLayer->DiskRead(i, buf_read,
-// 							       size_request,
-// 							       block_no *
-// 							       block_size);
-// 				//Cache End
-
-// 				if (NCFS_DATA->run_experiment == 1) {
-// 					gettimeofday(&t2, NULL);
-// 				temp_char}
-
-// 				for (j = 0; j < size_request; j++) {
-// 					//Calculate parity block P
-// 					buf2[j] = buf2[j] ^ buf_read[j];
-
-// 					//calculate the coefficient of the data block
-// 					data_disk_coeff = i;
-
-// 					if (i > code_disk_id) {
-// 						(data_disk_coeff)--;
-// 					}
-// 					if (i > parity_disk_id) {
-// 						(data_disk_coeff)--;
-// 					}
-// 					data_disk_coeff =
-// 					    disk_total_num - 3 -
-// 					    data_disk_coeff;
-// 					data_disk_coeff =
-// 					    gf_get_coefficient(data_disk_coeff,
-// 							       field_power);
-
-// 					//calculate code block Q
-// 					temp_char = buf3[j];
-// 					buf3[j] = temp_char ^
-// 					    (char)gf_mul((unsigned char)
-// 							 buf_read[j],
-// 							 data_disk_coeff,
-// 							 field_power);
-// 				}
-
-// 				if (NCFS_DATA->run_experiment == 1) {
-// 					gettimeofday(&t3, NULL);
-
-// 					duration = (t3.tv_sec - t2.tv_sec) +
-// 					    (t3.tv_usec -
-// 					     t2.tv_usec) / 1000000.0;
-// 					NCFS_DATA->encoding_time += duration;
-// 				}
-// 			}
-// 		}
-
-// 		if (NCFS_DATA->run_experiment == 1) {
-// 			gettimeofday(&t1, NULL);
-// 		}
-// 		// Cache Start
-// 		retstat =
-// 		    cacheLayer->DiskWrite(parity_disk_id, buf2, size,
-// 					  block_no * block_size);
-// 		retstat =
-// 		    cacheLayer->DiskWrite(code_disk_id, buf3, size,
-// 					  block_no * block_size);
-// 		// Cache End
-
-// 		if (NCFS_DATA->run_experiment == 1) {
-// 			gettimeofday(&t2, NULL);
-// 		}
-
-// 		free(buf_read);
-// 		free(buf2);
-// 		free(buf3);
-// 	}
-
-// 	block_written.disk_id = disk_id;
-// 	block_written.block_no = block_no;
-
-// 	return block_written;
-// }
-// //Modified by Dongsheng Wei on Jan. 12, 2014 begin.
-
 
 /*
  * mbr_encoding: MBR: Minimum Bandwidth Regenerating code (type=1000)
