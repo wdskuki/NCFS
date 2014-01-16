@@ -39,7 +39,12 @@ class CodingLayer {
 	struct data_block_info encoding_raid6(const char *buf, int size);
 	struct data_block_info encoding_mbr(const char *buf, int size);	//type 1000; exact MBR
 	struct data_block_info encoding_rs(const char *buf, int size);	//type 3000; Reed-Solomon
-
+	//Add by Dongsheng Wei on Jan. 16, 2014 begin.	
+	struct data_block_info encoding_mdr_I(const char *buf, int size); //type 5000; MDR I
+	struct data_block_info encoding_raid5_noRotate(const char *buf, int size); //type 5001; raid5(no rotate)
+	struct data_block_info encoding_raid6_noRotate(const char *buf, int size); //type 6001; raid6(no rotate)
+	//Add by Dongsheng Wei on Jan. 16, 2014 end.
+	
 	//decoding
 	int decoding_default(int disk_id, char *buf, long long size,
 			     long long offset);
@@ -59,6 +64,14 @@ class CodingLayer {
 			 long long offset);
 	int decoding_rs(int disk_id, char *buf, long long size,
 			long long offset);
+	//Add by Dongsheng Wei on Jan. 16, 2014 begin.
+	int decoding_mdr_I(int disk_id, char *buf, long long size,
+				long long offset);
+	int decoding_raid5_noRotate(int disk_id, char *buf, long long size,
+				long long offset);
+	int decoding_raid6_noRotate(int disk_id, char *buf, long long size,
+				long long offset);
+	//Add by Dongsheng Wei on Jan. 16, 2014 end.
 
  public:
 	 CodingLayer();

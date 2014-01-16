@@ -1,6 +1,6 @@
 disk_total_num=5
 chunk_size=8192
-disk_raid_type=5
+disk_raid_type=5000
 space_list_num=0
 0.dev_name=/dev/loop1
 0.free_offset=0
