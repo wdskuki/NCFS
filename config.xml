@@ -8,9 +8,9 @@
 		</Setting>
 		<Disk>
 			<TotalDiskNumber>5</TotalDiskNumber>
-			<DataDiskNumber>4</DataDiskNumber>
+			<DataDiskNumber>3</DataDiskNumber>
 			<ChunkSize>8192</ChunkSize>
-			<RaidType>5</RaidType>
+			<RaidType>5000</RaidType>
 			<DiskSetting>
 				<Disk1>
 					<DevName>/dev/loop1</DevName>

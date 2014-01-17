@@ -10,6 +10,10 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/time.h>
+#include <math.h>
+
+#include <vector>
+using namespace std;
 
 extern "C" {
 #include "../jerasure/galois.h"
@@ -309,6 +313,118 @@ int CodingLayer::mbr_get_dup_block_no(int disk_id, int mbr_block_id,
 
 	return dup_block_no;
 }
+
+//MDR_I operation
+//Add by Dongsheng Wei on Jan. 17, 2014 begin.
+long long* CodingLayer::mdr_I_iterative_construct_encoding_matrixB(long long *matrix, 
+												int k){
+	int i, j, t;
+	int row = (int)pow(2, k);
+	int col = k+1;
+	int len = row * col;
+	
+	int new_k = k+1;
+	int new_row = (int)pow(2, new_k);
+	int new_col = new_k+1;
+	int new_len = new_row * new_col;
+
+	long long * new_matrix = new long long [new_len];
+	if(new_k == 1 && matrix == NULL){
+		new_matrix[0] = 1;
+		new_matrix[1] = 0;
+		new_matrix[2] = 0;
+		new_matrix[3] = 2;
+		return new_matrix;
+	}else{
+		for(i = 0; i < new_col; i++){
+			if(i < new_col-2){
+				for(j = 0; j < row; j++){
+					new_matrix[j*new_col+i] = (matrix[j*col+i] 
+						^ matrix[j*col+col-1]) << row;
+				}
+				for(j = row; j < new_row; j++){
+					new_matrix[j*new_col+i] = (matrix[(j-row)*col+i] 
+						^ matrix[(j-row)*col+col-1]);
+				}
+			}else if(i == new_col-2){
+				t = 0;
+				for(j = row-1; j >= 0; j--){
+					new_matrix[j*new_col+i] = 1 << t;
+					t++;
+				}
+				for(j = row; j < new_row; j++){
+					new_matrix[j*new_col+i] = 0;
+				}
+			}else if(i == new_col-1){
+				for(j = 0; j < row; j++){
+					new_matrix[j*new_col+i] = 0;
+				}			
+				for(j = new_row-1; j >= row; j--){
+					new_matrix[j*new_col+i] = 1 << t;
+					t++;
+				}
+			}
+		}
+		//free(matrix);
+		delete []matrix;
+
+		return new_matrix;
+	}
+}
+
+void CodingLayer::mdr_print_matrix(long long* matrix, int row, int col){
+	for(int i = 0; i < row; i++){
+		for(int j = 0; j < col; j++)
+			printf("%lld\t",matrix[i*col+j]);
+		printf("\n");
+	}
+}
+
+long long* CodingLayer::mdr_I_encoding_matrix(int k){ 
+	int count;
+	long long *mdr_encoding_matrix_B;
+	if(k <= 0){
+		printf("error: k\n");
+		exit(1);
+	}
+	
+	mdr_encoding_matrix_B = new long long [4];
+
+	mdr_encoding_matrix_B[0] = 1;
+	mdr_encoding_matrix_B[1] = 0;
+	mdr_encoding_matrix_B[2] = 0;
+	mdr_encoding_matrix_B[3] = 2;	
+	if(k == 1)
+		return mdr_encoding_matrix_B;
+
+	count = 1;
+	while(count != k){
+		mdr_encoding_matrix_B = 
+			mdr_I_iterative_construct_encoding_matrixB(
+				mdr_encoding_matrix_B, count);
+		count++;
+	}
+	return mdr_encoding_matrix_B;
+}
+
+vector<int> CodingLayer::mdr_I_find_q_blocks_id(int disk_id, int block_no){
+	vector<int> ivec;
+
+	int row = strip_size;
+	int col = NCFS_DATA->data_disk_num + 1;
+
+	int t = 1 << (strip_size - block_no -1);
+	for(int i = 0; i < row; i++){
+		if((mdr_I_encoding_matrixB[i*col+disk_id]&t) != 0){
+			ivec.push_back(i);
+		}
+	}
+	return ivec;
+}
+
+//Add by Dongsheng Wei on Jan. 17, 2014 end.
+
+
 
 /*************************************************************************
  * Encoding functions
@@ -881,6 +997,7 @@ struct data_block_info CodingLayer::encoding_raid6(const char *buf, int size)
 		}
 	}
 
+
 	//get block from space_list if no free block available
 	if (disk_id == -1) {
 		if (NCFS_DATA->space_list_head != NULL) {
@@ -1003,6 +1120,541 @@ struct data_block_info CodingLayer::encoding_raid6(const char *buf, int size)
 
 	return block_written;
 }
+
+
+//Add by Dongsheng Wei on Jan. 16, 2014 begin.
+
+struct data_block_info CodingLayer::encoding_mdr_I(const char *buf, int size)
+{
+	int retstat, disk_id, block_no, disk_total_num, block_size;
+	int size_request, block_request, free_offset;
+	struct data_block_info block_written;
+	int i, j;
+	int parity_disk_id, code_disk_id;
+	char *buf2, *buf3, *buf_read;
+	//dongsheng wei
+	char *buf_parity_disk, *buf_code_disk;
+	int data_disk_num;
+	vector<int> q_blocks_no;
+//	int strip_size;
+	//dongsheng wei
+	char temp_char;
+	int data_disk_coeff;
+
+	struct timeval t1, t2, t3;
+	//dongsheng wei
+	struct timeval t4, t5, t6;
+	//dongsheng wei
+	double duration;
+
+	disk_total_num = NCFS_DATA->disk_total_num;
+	block_size = NCFS_DATA->chunk_size;
+
+	size_request = fileSystemLayer->round_to_block_size(size);
+	block_request = size_request / block_size;
+
+	data_disk_num = disk_total_num - 2;
+
+
+
+
+	//implement disk write algorithm here.
+	//here use raid6.
+
+	//dognsheng wei
+	// for (i = 0; i < disk_total_num; i++) {
+	// 	//mark blocks of code_disk and parity_disk
+	// 	if ((i ==
+	// 	     (disk_total_num - 1 -
+	// 	      (NCFS_DATA->free_offset[i] % disk_total_num)))
+	// 	    || (i ==
+	// 		(disk_total_num - 1 -
+	// 		 ((NCFS_DATA->free_offset[i] + 1) % disk_total_num)))) {
+	// 		(NCFS_DATA->free_offset[i])++;
+	// 		(NCFS_DATA->free_size[i])--;
+	// 	}
+	// }
+
+	block_no = 0;
+	disk_id = -1;
+	free_offset = NCFS_DATA->free_offset[0];
+	//dongsheng wei
+	for (i = disk_total_num - 3; i >= 0; i--) {
+		if ((block_request <= (NCFS_DATA->free_size[i]))
+		    && (free_offset >= (NCFS_DATA->free_offset[i]))) {
+			disk_id = i;
+			block_no = NCFS_DATA->free_offset[i];
+			free_offset = block_no;
+		}
+	}
+
+	//dongsheng wei
+	if(disk_id == 0){
+		(NCFS_DATA->free_offset[disk_total_num-2])++;
+		(NCFS_DATA->free_size[disk_total_num-2])--;
+		if(block_no % strip_size == 0){
+			(NCFS_DATA->free_offset[disk_total_num-1]) += strip_size;
+			(NCFS_DATA->free_size[disk_total_num-1]) -= strip_size;
+		}
+	}
+
+	//get block from space_list if no free block available
+	if (disk_id == -1) {
+		if (NCFS_DATA->space_list_head != NULL) {
+			disk_id = NCFS_DATA->space_list_head->disk_id;
+			block_no = NCFS_DATA->space_list_head->disk_block_no;
+			fileSystemLayer->space_list_remove(disk_id, block_no);
+		}
+	}
+
+	if (disk_id == -1) {
+		printf("***get_data_block_no: ERROR disk_id = -1\n");
+	} else {
+
+
+		NCFS_DATA->free_offset[disk_id] = block_no + block_request;
+		NCFS_DATA->free_size[disk_id]
+		    = NCFS_DATA->free_size[disk_id] - block_request;
+
+		int p_disk_id = disk_total_num - 2;
+		int q_disk_id = disk_total_num - 1;
+		
+
+		// //dongsheng wei
+		char* buf_p_disk = (char *)malloc(sizeof(char) * size_request);
+		char* buf_q_disk = (char *)malloc(sizeof(char) * size_request);
+
+		
+		//read P block
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t1, NULL);
+		retstat = cacheLayer->DiskRead(p_disk_id, buf_p_disk, 
+			size_request, block_no * block_size);	
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t2, NULL);
+		duration = (t2.tv_sec - t1.tv_sec) + 
+				(t2.tv_usec - t1.tv_usec) / 1000000.0;
+		NCFS_DATA->diskread_time += duration;		
+		
+		//calculate new P block
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t1, NULL);
+		for (j = 0; j < size_request; j++) {
+			buf_p_disk[j] = buf_p_disk[j] ^ buf[j];
+		}
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t2, NULL);
+		duration = (t2.tv_sec - t1.tv_sec) + 
+				(t2.tv_usec - t1.tv_usec) / 1000000.0;
+		NCFS_DATA->encoding_time += duration;	
+
+		//write new P block
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t1, NULL);
+		retstat = cacheLayer->DiskWrite(p_disk_id, buf_p_disk, size, 
+			block_no * block_size);	
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t2, NULL);
+		duration = (t2.tv_sec - t1.tv_sec) + 
+				(t2.tv_usec - t1.tv_usec) / 1000000.0;
+		NCFS_DATA->diskwrite_time += duration;		
+
+
+
+		//read Q block
+		int strip_num = block_no / strip_size;
+		int strip_offset = block_no % strip_size;
+
+		q_blocks_no = mdr_I_find_q_blocks_id(disk_id, strip_offset);
+		int q_blk_num = q_blocks_no.size();
+		for(i = 0; i < q_blk_num; i++){
+			int q_blk_no = q_blocks_no[i] + strip_num * strip_size;
+
+			//read Q blk
+			memset(buf_q_disk, 0, size_request);
+			if (NCFS_DATA->run_experiment == 1) gettimeofday(&t3, NULL);
+			retstat = cacheLayer->DiskRead(q_disk_id, buf_q_disk, 
+				size_request, block_no * block_size);	
+			if (NCFS_DATA->run_experiment == 1) gettimeofday(&t4, NULL);
+			duration = (t4.tv_sec - t3.tv_sec) + 
+					(t4.tv_usec - t3.tv_usec) / 1000000.0;
+			NCFS_DATA->diskread_time += duration;
+
+			//calculate new Q blk
+			if (NCFS_DATA->run_experiment == 1) gettimeofday(&t3, NULL);
+			for (j = 0; j < size_request; j++) {
+				buf_q_disk[j] = buf_q_disk[j] ^ buf[j];
+			}
+			if (NCFS_DATA->run_experiment == 1) gettimeofday(&t4, NULL);
+			duration = (t4.tv_sec - t3.tv_sec) + 
+					(t4.tv_usec - t3.tv_usec) / 1000000.0;
+			NCFS_DATA->encoding_time += duration;
+
+			//write new Q blk
+			if (NCFS_DATA->run_experiment == 1) gettimeofday(&t3, NULL);
+			retstat = cacheLayer->DiskWrite(q_disk_id, buf_q_disk, size, 
+				block_no * block_size);	
+			if (NCFS_DATA->run_experiment == 1) gettimeofday(&t4, NULL);
+			duration = (t4.tv_sec - t3.tv_sec) + 
+					(t4.tv_usec - t3.tv_usec) / 1000000.0;
+			NCFS_DATA->diskwrite_time += duration;				
+		}
+
+
+		//write buf
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t5, NULL);
+		retstat = cacheLayer->DiskWrite(disk_id, buf, size, 
+			block_no * block_size);	
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t6, NULL);
+		duration = (t6.tv_sec - t5.tv_sec) + 
+				(t6.tv_usec - t5.tv_usec) / 1000000.0;
+		NCFS_DATA->diskwrite_time += duration;				
+
+		free(buf_p_disk);
+		free(buf_q_disk);
+	}
+
+	block_written.disk_id = disk_id;
+	block_written.block_no = block_no;
+
+	return block_written;
+}
+
+struct data_block_info CodingLayer::encoding_raid6_noRotate(const char *buf, int size)
+{
+	int retstat, disk_id, block_no, disk_total_num, block_size;
+	int size_request, block_request, free_offset;
+	struct data_block_info block_written;
+	int i, j;
+	int parity_disk_id, code_disk_id;
+	char *buf2, *buf3, *buf_read;
+	char temp_char;
+	int data_disk_coeff;
+
+	struct timeval t1, t2, t3;
+	double duration;
+
+	disk_total_num = NCFS_DATA->disk_total_num;
+	block_size = NCFS_DATA->chunk_size;
+
+	size_request = fileSystemLayer->round_to_block_size(size);
+	block_request = size_request / block_size;
+
+	//implement disk write algorithm here.
+	//here use raid6.
+
+	//dognsheng wei
+	// for (i = 0; i < disk_total_num; i++) {
+	// 	//mark blocks of code_disk and parity_disk
+	// 	if ((i ==
+	// 	     (disk_total_num - 1 -
+	// 	      (NCFS_DATA->free_offset[i] % disk_total_num)))
+	// 	    || (i ==
+	// 		(disk_total_num - 1 -
+	// 		 ((NCFS_DATA->free_offset[i] + 1) % disk_total_num)))) {
+	// 		(NCFS_DATA->free_offset[i])++;
+	// 		(NCFS_DATA->free_size[i])--;
+	// 	}
+	// }
+
+	block_no = 0;
+	disk_id = -1;
+	free_offset = NCFS_DATA->free_offset[0];
+	//dongsheng wei
+	for (i = disk_total_num - 3; i >= 0; i--) {
+		if ((block_request <= (NCFS_DATA->free_size[i]))
+		    && (free_offset >= (NCFS_DATA->free_offset[i]))) {
+			disk_id = i;
+			block_no = NCFS_DATA->free_offset[i];
+			free_offset = block_no;
+		}
+	}
+
+	//dongsheng wei
+	if(disk_id == 0){
+		(NCFS_DATA->free_offset[disk_total_num-2])++;
+		(NCFS_DATA->free_size[disk_total_num-2])--;
+		(NCFS_DATA->free_offset[disk_total_num-1])++;
+		(NCFS_DATA->free_size[disk_total_num-1])--;
+	}
+
+	//get block from space_list if no free block available
+	if (disk_id == -1) {
+		if (NCFS_DATA->space_list_head != NULL) {
+			disk_id = NCFS_DATA->space_list_head->disk_id;
+			block_no = NCFS_DATA->space_list_head->disk_block_no;
+			fileSystemLayer->space_list_remove(disk_id, block_no);
+		}
+	}
+
+	if (disk_id == -1) {
+		printf("***get_data_block_no: ERROR disk_id = -1\n");
+	} else {
+		buf_read = (char *)malloc(sizeof(char) * size_request);
+		buf2 = (char *)malloc(sizeof(char) * size_request);
+		memset(buf2, 0, size_request);
+		buf3 = (char *)malloc(sizeof(char) * size_request);
+		memset(buf3, 0, size_request);
+
+		NCFS_DATA->free_offset[disk_id] = block_no + block_request;
+		NCFS_DATA->free_size[disk_id]
+		    = NCFS_DATA->free_size[disk_id] - block_request;
+
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t1, NULL);
+		}
+		// Cache Start
+		retstat =
+		    cacheLayer->DiskWrite(disk_id, buf, size,
+					  block_no * block_size);
+		// Cache End
+
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t2, NULL);
+		}
+
+		//dongsheng wei
+		// code_disk_id = disk_total_num - 1 - (block_no % disk_total_num);
+		// parity_disk_id =
+		//     disk_total_num - 1 - ((block_no + 1) % disk_total_num);
+
+		code_disk_id = disk_total_num - 1;
+		parity_disk_id = disk_total_num-2;
+
+		for (i = 0; i < disk_total_num; i++) {
+			if ((i != parity_disk_id) && (i != code_disk_id)) {
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t1, NULL);
+				}
+				//Cache Start
+				retstat = cacheLayer->DiskRead(i, buf_read,
+							       size_request,
+							       block_no *
+							       block_size);
+				//Cache End
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t2, NULL);
+				}
+
+				for (j = 0; j < size_request; j++) {
+					//Calculate parity block P
+					buf2[j] = buf2[j] ^ buf_read[j];
+
+					//calculate the coefficient of the data block
+					data_disk_coeff = i;
+
+					if (i > code_disk_id) {
+						(data_disk_coeff)--;
+					}
+					if (i > parity_disk_id) {
+						(data_disk_coeff)--;
+					}
+					data_disk_coeff =
+					    disk_total_num - 3 -
+					    data_disk_coeff;
+					data_disk_coeff =
+					    gf_get_coefficient(data_disk_coeff,
+							       field_power);
+
+					//calculate code block Q
+					temp_char = buf3[j];
+					buf3[j] = temp_char ^
+					    (char)gf_mul((unsigned char)
+							 buf_read[j],
+							 data_disk_coeff,
+							 field_power);
+				}
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t3, NULL);
+
+					duration = (t3.tv_sec - t2.tv_sec) +
+					    (t3.tv_usec -
+					     t2.tv_usec) / 1000000.0;
+					NCFS_DATA->encoding_time += duration;
+				}
+			}
+		}
+
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t1, NULL);
+		}
+		// Cache Start
+		retstat =
+		    cacheLayer->DiskWrite(parity_disk_id, buf2, size,
+					  block_no * block_size);
+		retstat =
+		    cacheLayer->DiskWrite(code_disk_id, buf3, size,
+					  block_no * block_size);
+		// Cache End
+
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t2, NULL);
+		}
+
+		free(buf_read);
+		free(buf2);
+		free(buf3);
+	}
+
+	block_written.disk_id = disk_id;
+	block_written.block_no = block_no;
+
+	return block_written;
+}
+
+struct data_block_info CodingLayer::encoding_raid5_noRotate(const char *buf, int size)
+{
+	//RAID 5 with no rotate
+
+	int retstat, disk_id, block_no, disk_total_num, block_size;
+	int size_request, block_request, free_offset;
+	struct data_block_info block_written;
+	int i, j;
+	int parity_disk_id;
+	char *buf2, *buf_read;
+
+	struct timeval t1, t2, t3, t4, t5, t6;
+	double duration;
+
+	disk_total_num = NCFS_DATA->disk_total_num;
+	block_size = NCFS_DATA->chunk_size;
+
+	size_request = fileSystemLayer->round_to_block_size(size);
+	block_request = size_request / block_size;
+
+	//implement disk write algorithm here.
+	//here use raid5: stripped block allocation plus distributed parity.
+	//approach: calculate xor of the block on all data disk
+
+	// //dongsheng wei
+	// for (i = 0; i < disk_total_num; i++) {
+	// 	if (i ==
+	// 	    (disk_total_num - 1 -
+	// 	     (NCFS_DATA->free_offset[i] % disk_total_num))) {
+	// 		(NCFS_DATA->free_offset[i])++;
+	// 		(NCFS_DATA->free_size[i])--;
+	// 	}
+	// }
+
+	block_no = 0;
+	disk_id = -1;
+	free_offset = NCFS_DATA->free_offset[0];
+	//dongsheng wei
+	for (i = disk_total_num - 2; i >= 0; i--) {
+		if ((block_request <= (NCFS_DATA->free_size[i]))
+		    && (free_offset >= (NCFS_DATA->free_offset[i]))) {
+			disk_id = i;
+			block_no = NCFS_DATA->free_offset[i];
+			free_offset = block_no;
+		}
+	}
+
+
+	//dongsheng wei
+	printf("\n\ndisk_id = %d\n\n", disk_id);
+	if(disk_id == 0){
+		(NCFS_DATA->free_offset[disk_total_num-1])++;
+		(NCFS_DATA->free_size[disk_total_num-1])--;
+	}
+
+	//get block from space_list if no free block available
+	if (disk_id == -1) {
+		if (NCFS_DATA->space_list_head != NULL) {
+			disk_id = NCFS_DATA->space_list_head->disk_id;
+			block_no = NCFS_DATA->space_list_head->disk_block_no;
+			fileSystemLayer->space_list_remove(disk_id, block_no);
+		}
+	}
+
+	if (disk_id == -1) {
+		printf("***get_data_block_no: ERROR disk_id = -1\n");
+	} else {
+		buf_read = (char *)malloc(sizeof(char) * size_request);
+		buf2 = (char *)malloc(sizeof(char) * size_request);
+
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t1, NULL);
+		}
+		//Cache Start
+		retstat =
+		    cacheLayer->DiskRead(disk_id, buf2, size_request,
+					 block_no * block_size);
+		//Cache End
+
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t2, NULL);
+		}
+
+		for (j = 0; j < size_request; j++) {
+			buf2[j] = buf2[j] ^ buf[j];
+		}
+
+		NCFS_DATA->free_offset[disk_id] = block_no + block_request;
+		NCFS_DATA->free_size[disk_id]
+		    = NCFS_DATA->free_size[disk_id] - block_request;
+
+		// parity_disk_id = 
+		//     disk_total_num - 1 - (block_no % disk_total_num);
+
+		//dongsheng wei
+		parity_disk_id = disk_total_num - 1;
+		//dongsheng wei
+
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t3, NULL);
+		}
+		//Cache Start
+		retstat =
+		    cacheLayer->DiskRead(parity_disk_id, buf_read, size_request,
+					 block_no * block_size);
+		//Cache End
+
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t4, NULL);
+		}
+
+		for (j = 0; j < size_request; j++) {
+			buf2[j] = buf2[j] ^ buf_read[j];
+		}
+
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t5, NULL);
+		}
+		//Cache Start
+		//write data
+		retstat =
+		    cacheLayer->DiskWrite(disk_id, buf, size,
+					  block_no * block_size);
+		//Cache End
+
+		//Cache Start
+		//write parity
+		retstat =
+		    cacheLayer->DiskWrite(parity_disk_id, buf2, size,
+					  block_no * block_size);
+		//Cache End
+
+		free(buf_read);
+		free(buf2);
+
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t6, NULL);
+
+			duration = (t3.tv_sec - t2.tv_sec) +
+			    (t3.tv_usec - t2.tv_usec) / 1000000.0;
+			NCFS_DATA->encoding_time += duration;
+
+			duration = (t5.tv_sec - t4.tv_sec) +
+			    (t5.tv_usec - t4.tv_usec) / 1000000.0;
+			NCFS_DATA->encoding_time += duration;
+		}
+	}
+
+	block_written.disk_id = disk_id;
+	block_written.block_no = block_no;
+
+	return block_written;
+}
+
+//Add by Dongsheng Wei on Jan. 16, 2014 end.
+
 
 /*
  * mbr_encoding: MBR: Minimum Bandwidth Regenerating code (type=1000)
@@ -2499,6 +3151,1797 @@ int CodingLayer::decoding_raid6(int disk_id, char *buf, long long size,
 	return -1;
 }
 
+//Add by Dongsheng Wei on Jan. 16, 2014 begin.
+int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
+				long long offset)
+{
+	int retstat;
+	char *temp_buf;
+	int i;
+	long long j;
+	int disk_failed_no;
+	int disk_another_failed_id;	//id of second failed disk
+
+	int code_disk_id, parity_disk_id;
+	int block_size;
+	long long block_no;
+	int disk_total_num;
+	int data_disk_coeff;
+	char temp_char;
+
+	int g1, g2, g12;
+	char *P_temp;
+	char *Q_temp;
+
+	struct timeval t1, t2, t3;
+	double duration;
+
+	temp_buf = (char *)malloc(sizeof(char) * size);
+	memset(temp_buf, 0, size);
+
+	P_temp = (char *)malloc(sizeof(char) * size);
+	memset(P_temp, 0, size);
+
+	Q_temp = (char *)malloc(sizeof(char) * size);
+	memset(Q_temp, 0, size);
+
+	memset(buf, 0, size);
+	int *inttemp_buf = (int *)temp_buf;
+	int *intbuf = (int *)buf;
+
+	disk_total_num = NCFS_DATA->disk_total_num;
+	block_size = NCFS_DATA->chunk_size;
+	block_no = offset / block_size;
+
+	//dongsheng wei
+	// code_disk_id = disk_total_num - 1 - (block_no % disk_total_num);
+	// parity_disk_id = disk_total_num - 1 - ((block_no + 1) % disk_total_num);
+	code_disk_id = disk_total_num - 1;
+	parity_disk_id = disk_total_num - 2;
+
+	if (NCFS_DATA->disk_status[disk_id] == 0) {
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t1, NULL);
+		}
+
+		retstat = cacheLayer->DiskRead(disk_id, buf, size, offset);
+
+		if (NCFS_DATA->run_experiment == 1){
+			gettimeofday(&t2, NULL);
+		}
+
+		free(temp_buf);
+		free(P_temp);
+		free(Q_temp);
+
+		return retstat;
+	} else {
+		//check the number of failed disks
+		disk_failed_no = 0;
+		for (i = 0; i < disk_total_num; i++) {
+			if (NCFS_DATA->disk_status[i] == 1) {
+				(disk_failed_no)++;
+				if (i != disk_id) {
+					disk_another_failed_id = i;
+				}
+			}
+		}
+
+		if (((disk_failed_no == 1) && (disk_id != code_disk_id)) ||
+		    ((disk_failed_no == 2)
+		     && (disk_another_failed_id == code_disk_id))) {
+			//case of single non-Q disk fail (D or P), or two-disk (data disk + Q disk) fail (D + Q)
+			for (i = 0; i < disk_total_num; ++i) {
+				if ((i != disk_id) && (i != code_disk_id)) {
+					if (NCFS_DATA->disk_status[i] != 0) {
+						printf
+						    ("Raid 6 both disk %d and %d are failed\n",
+						     disk_id, i);
+						return -1;
+					}
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t1, NULL);
+					}
+
+					retstat =
+					    cacheLayer->DiskRead(i, temp_buf,
+								 size, offset);
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t2, NULL);
+					}
+
+					for (j = 0;
+					     j <
+					     (long long)(size * sizeof(char) /
+							 sizeof(int)); ++j) {
+						intbuf[j] =
+						    intbuf[j] ^ inttemp_buf[j];
+					}
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t3, NULL);
+
+						duration =
+						    (t3.tv_sec - t2.tv_sec) +
+						    (t3.tv_usec -
+						     t2.tv_usec) / 1000000.0;
+						NCFS_DATA->decoding_time +=
+						    duration;
+					}
+				}
+			}
+		} else if (((disk_failed_no == 1) && (disk_id == code_disk_id))
+			   || ((disk_failed_no == 2)
+			       && (disk_id == code_disk_id)
+			       && (disk_another_failed_id == parity_disk_id))) {
+			//case of "single Q disk fails" (Q) or "Q + P disk failure" (Q + P)
+
+			//Calculate Q
+			for (i = 0; i < disk_total_num; i++) {
+				if ((i != parity_disk_id)
+				    && (i != code_disk_id)) {
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t1, NULL);
+					}
+					//Cache Start
+					retstat =
+					    cacheLayer->DiskRead(i, temp_buf,
+								 size, offset);
+					//Cache End
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t2, NULL);
+					}
+
+					for (j = 0; j < size; j++) {
+						//calculate the coefficient of the data block
+						data_disk_coeff = i;
+
+						if (i > code_disk_id) {
+							(data_disk_coeff)--;
+						}
+						if (i > parity_disk_id) {
+							(data_disk_coeff)--;
+						}
+						data_disk_coeff =
+						    disk_total_num - 3 -
+						    data_disk_coeff;
+						data_disk_coeff =
+						    gf_get_coefficient
+						    (data_disk_coeff,
+						     field_power);
+
+						//calculate code block Q
+						buf[j] = buf[j] ^
+						    (char)gf_mul((unsigned char)
+								 temp_buf[j],
+								 data_disk_coeff,
+								 field_power);
+					}
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t3, NULL);
+
+						duration =
+						    (t3.tv_sec - t2.tv_sec) +
+						    (t3.tv_usec -
+						     t2.tv_usec) / 1000000.0;
+						NCFS_DATA->decoding_time +=
+						    duration;
+					}
+				}
+			}
+		} else if (disk_failed_no == 2) {
+			//case of two-disk fail (data disk + non Q disk) (disk_id and disk_second_id)
+			//compute Q' to restore data
+
+			if ((disk_id == parity_disk_id)
+			    && (disk_another_failed_id != code_disk_id)) {
+				//case of P disk + data disk fail (P + D)
+
+				//calculate Q'
+				for (i = 0; i < disk_total_num; i++) {
+					if ((i != disk_id)
+					    && (i != disk_another_failed_id)
+					    && (i != parity_disk_id)
+					    && (i != code_disk_id)) {
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						retstat =
+						    cacheLayer->DiskRead(i,
+									 temp_buf,
+									 size,
+									 offset);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+						//calculate the coefficient of the data block
+						data_disk_coeff = i;
+
+						if (i > code_disk_id) {
+							(data_disk_coeff)--;
+						}
+						if (i > parity_disk_id) {
+							(data_disk_coeff)--;
+						}
+						data_disk_coeff =
+						    disk_total_num - 3 -
+						    data_disk_coeff;
+						data_disk_coeff =
+						    gf_get_coefficient
+						    (data_disk_coeff,
+						     field_power);
+
+						for (j = 0; j < size; j++) {
+							buf[j] = buf[j] ^
+							    (char)
+							    gf_mul((unsigned
+								    char)
+								   temp_buf[j],
+								   data_disk_coeff,
+								   field_power);
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t3, NULL);
+
+							duration =
+							    (t3.tv_sec -
+							     t2.tv_sec) +
+							    (t3.tv_usec -
+							     t2.tv_usec) /
+							    1000000.0;
+							NCFS_DATA->
+							    decoding_time +=
+							    duration;
+						}
+					}
+				}
+
+				//calculate Q xor Q'
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t1, NULL);
+				}
+
+				retstat =
+				    cacheLayer->DiskRead(code_disk_id, temp_buf,
+							 size, offset);
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t2, NULL);
+				}
+
+				for (j = 0; j < size; j++) {
+					buf[j] = buf[j] ^ temp_buf[j];
+				}
+
+				//calculate the coefficient of the data block
+				data_disk_coeff = disk_id;
+
+				if (disk_id > code_disk_id) {
+					(data_disk_coeff)--;
+				}
+				if (disk_id > parity_disk_id) {
+					(data_disk_coeff)--;
+				}
+				data_disk_coeff =
+				    disk_total_num - 3 - data_disk_coeff;
+				data_disk_coeff =
+				    gf_get_coefficient(data_disk_coeff,
+						       field_power);
+
+				//decode the origianl data block
+				for (j = 0; j < size; j++) {
+					temp_char = buf[j];
+					buf[j] =
+					    (char)gf_div((unsigned char)
+							 temp_char,
+							 data_disk_coeff,
+							 field_power);
+				}
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t3, NULL);
+
+					duration = (t3.tv_sec - t2.tv_sec) +
+					    (t3.tv_usec -
+					     t2.tv_usec) / 1000000.0;
+					NCFS_DATA->decoding_time += duration;
+				}
+				//find P
+				for (i = 0; i < disk_total_num; ++i) {
+					if ((i != disk_id)
+					    && (i != code_disk_id)
+					    && (i != disk_another_failed_id)) {
+						if (NCFS_DATA->disk_status[i] !=
+						    0) {
+							printf
+							    ("Raid 6 both disk %d and %d are failed\n",
+							     disk_id, i);
+							return -1;
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						retstat =
+						    cacheLayer->DiskRead(i,
+									 temp_buf,
+									 size,
+									 offset);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+
+						for (j = 0;
+						     j <
+						     (long long)(size *
+								 sizeof(char) /
+								 sizeof(int));
+						     ++j) {
+							intbuf[j] =
+							    intbuf[j] ^
+							    inttemp_buf[j];
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t3, NULL);
+
+							duration =
+							    (t3.tv_sec -
+							     t2.tv_sec) +
+							    (t3.tv_usec -
+							     t2.tv_usec) /
+							    1000000.0;
+							NCFS_DATA->
+							    decoding_time +=
+							    duration;
+						}
+					}
+				}
+			} else if ((disk_id == code_disk_id)
+				   && (disk_another_failed_id !=
+				       parity_disk_id)) {
+				//case of Q disk + data disk fail (Q + D)
+
+				//find D from P
+				for (i = 0; i < disk_total_num; ++i) {
+					if ((i != disk_id)
+					    && (i != disk_another_failed_id)) {
+						if (NCFS_DATA->disk_status[i] !=
+						    0) {
+							printf
+							    ("Raid 6 both disk %d and %d are failed\n",
+							     disk_id, i);
+							return -1;
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						retstat =
+						    cacheLayer->DiskRead(i,
+									 temp_buf,
+									 size,
+									 offset);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+
+						for (j = 0;
+						     j <
+						     (long long)(size *
+								 sizeof(char) /
+								 sizeof(int));
+						     ++j) {
+							intbuf[j] =
+							    intbuf[j] ^
+							    inttemp_buf[j];
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t3, NULL);
+
+							duration =
+							    (t3.tv_sec -
+							     t2.tv_sec) +
+							    (t3.tv_usec -
+							     t2.tv_usec) /
+							    1000000.0;
+							NCFS_DATA->
+							    decoding_time +=
+							    duration;
+						}
+					}
+				}
+
+				//calculate Q
+				for (i = 0; i < disk_total_num; i++) {
+					if ((i != parity_disk_id)
+					    && (i != code_disk_id)) {
+						if (i != disk_another_failed_id) {
+							if (NCFS_DATA->
+							    run_experiment ==
+							    1) {
+								gettimeofday
+								    (&t1, NULL);
+							}
+							//Cache Start
+							retstat =
+							    cacheLayer->
+							    DiskRead(i,
+								     temp_buf,
+								     size,
+								     offset);
+							//Cache End
+
+							if (NCFS_DATA->
+							    run_experiment ==
+							    1) {
+								gettimeofday
+								    (&t2, NULL);
+							}
+						} else {	//use the recovered D
+							for (j = 0; j < size;
+							     j++) {
+								temp_buf[j] =
+								    buf[j];
+							}
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						for (j = 0; j < size; j++) {
+							//calculate the coefficient of the data block
+							data_disk_coeff = i;
+
+							if (i > code_disk_id) {
+								(data_disk_coeff)--;
+							}
+							if (i > parity_disk_id) {
+								(data_disk_coeff)--;
+							}
+							data_disk_coeff =
+							    disk_total_num - 3 -
+							    data_disk_coeff;
+							data_disk_coeff =
+							    gf_get_coefficient
+							    (data_disk_coeff,
+							     field_power);
+
+							//calculate code block Q
+							Q_temp[j] = Q_temp[j] ^
+							    (char)
+							    gf_mul((unsigned
+								    char)
+								   temp_buf[j],
+								   data_disk_coeff,
+								   field_power);
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+					}
+				}
+
+				for (j = 0; j < size; j++) {
+					buf[j] = Q_temp[j];
+				}
+			} else if (disk_another_failed_id == parity_disk_id) {
+				//case of data disk + P disk fail (D + P)
+
+				//calculate Q'
+				for (i = 0; i < disk_total_num; i++) {
+					if ((i != disk_id)
+					    && (i != disk_another_failed_id)
+					    && (i != parity_disk_id)
+					    && (i != code_disk_id)) {
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						retstat =
+						    cacheLayer->DiskRead(i,
+									 temp_buf,
+									 size,
+									 offset);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+						//calculate the coefficient of the data block
+						data_disk_coeff = i;
+
+						if (i > code_disk_id) {
+							(data_disk_coeff)--;
+						}
+						if (i > parity_disk_id) {
+							(data_disk_coeff)--;
+						}
+						data_disk_coeff =
+						    disk_total_num - 3 -
+						    data_disk_coeff;
+						data_disk_coeff =
+						    gf_get_coefficient
+						    (data_disk_coeff,
+						     field_power);
+
+						for (j = 0; j < size; j++) {
+							temp_char = buf[j];
+							buf[j] = buf[j] ^
+							    (char)
+							    gf_mul((unsigned
+								    char)
+								   temp_buf[j],
+								   data_disk_coeff,
+								   field_power);
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t3, NULL);
+
+							duration =
+							    (t3.tv_sec -
+							     t2.tv_sec) +
+							    (t3.tv_usec -
+							     t2.tv_usec) /
+							    1000000.0;
+							NCFS_DATA->
+							    decoding_time +=
+							    duration;
+						}
+					}
+				}
+
+				//calculate Q xor Q'
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t1, NULL);
+				}
+
+				retstat =
+				    cacheLayer->DiskRead(code_disk_id, temp_buf,
+							 size, offset);
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t2, NULL);
+				}
+
+				for (j = 0; j < size; j++) {
+					buf[j] = buf[j] ^ temp_buf[j];
+				}
+
+				//calculate the coefficient of the data block
+				data_disk_coeff = disk_id;
+
+				if (disk_id > code_disk_id) {
+					(data_disk_coeff)--;
+				}
+				if (disk_id > parity_disk_id) {
+					(data_disk_coeff)--;
+				}
+				data_disk_coeff =
+				    disk_total_num - 3 - data_disk_coeff;
+				data_disk_coeff =
+				    gf_get_coefficient(data_disk_coeff,
+						       field_power);
+
+				//decode the origianl data block
+				for (j = 0; j < size; j++) {
+					temp_char = buf[j];
+					buf[j] =
+					    (char)gf_div((unsigned char)
+							 temp_char,
+							 data_disk_coeff,
+							 field_power);
+				}
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t3, NULL);
+
+					duration = (t3.tv_sec - t2.tv_sec) +
+					    (t3.tv_usec -
+					     t2.tv_usec) / 1000000.0;
+					NCFS_DATA->decoding_time += duration;
+				}
+				//return retstat;
+			} else {
+				// two data disk fail (D + D)
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t1, NULL);
+				}
+				//calculate g1
+				g1 = disk_id;
+				if (g1 > code_disk_id) {
+					(g1)--;
+				}
+				if (g1 > parity_disk_id) {
+					(g1)--;
+				}
+				g1 = disk_total_num - 3 - g1;
+				g1 = gf_get_coefficient(g1, field_power);
+
+				//calculate g2
+				g2 = disk_another_failed_id;
+				if (g2 > code_disk_id) {
+					(g2)--;
+				}
+				if (g2 > parity_disk_id) {
+					(g2)--;
+				}
+				g2 = disk_total_num - 3 - g2;
+				g2 = gf_get_coefficient(g2, field_power);
+
+				//calculate g12
+				g12 = g1 ^ g2;
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t2, NULL);
+
+					duration = (t2.tv_sec - t1.tv_sec) +
+					    (t2.tv_usec -
+					     t1.tv_usec) / 1000000.0;
+					NCFS_DATA->decoding_time += duration;
+				}
+
+				for (i = 0; i < disk_total_num; i++) {
+					if ((i != disk_id)
+					    && (i != disk_another_failed_id)
+					    && (i != parity_disk_id)
+					    && (i != code_disk_id)) {
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						retstat =
+						    cacheLayer->DiskRead(i,
+									 temp_buf,
+									 size,
+									 offset);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+
+						for (j = 0; j < size; j++) {
+							P_temp[j] =
+							    P_temp[j] ^
+							    temp_buf[j];
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t3, NULL);
+
+							duration =
+							    (t3.tv_sec -
+							     t2.tv_sec) +
+							    (t3.tv_usec -
+							     t2.tv_usec) /
+							    1000000.0;
+							NCFS_DATA->
+							    decoding_time +=
+							    duration;
+						}
+					}
+				}
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t1, NULL);
+				}
+
+				retstat =
+				    cacheLayer->DiskRead(parity_disk_id,
+							 temp_buf, size,
+							 offset);
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t2, NULL);
+				}
+
+				for (j = 0; j < size; j++) {
+					P_temp[j] = P_temp[j] ^ temp_buf[j];
+					//P_temp = P' xor P
+				}
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t3, NULL);
+
+					duration = (t3.tv_sec - t2.tv_sec) +
+					    (t3.tv_usec -
+					     t2.tv_usec) / 1000000.0;
+					NCFS_DATA->decoding_time += duration;
+				}
+				for (i = 0; i < disk_total_num; i++) {
+					if (((i != disk_id)
+					     && (i != disk_another_failed_id))
+					    && (i != parity_disk_id)
+					    && (i != code_disk_id)) {
+
+						//calculate the coefficient of the data block
+						data_disk_coeff = i;
+
+						if (i > code_disk_id) {
+							(data_disk_coeff)--;
+						}
+						if (i > parity_disk_id) {
+							(data_disk_coeff)--;
+						}
+						data_disk_coeff =
+						    disk_total_num - 3 -
+						    data_disk_coeff;
+						data_disk_coeff =
+						    gf_get_coefficient
+						    (data_disk_coeff,
+						     field_power);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						retstat =
+						    cacheLayer->DiskRead(i,
+									 temp_buf,
+									 size,
+									 offset);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+
+						for (j = 0; j < size; j++) {
+							temp_char = Q_temp[j];
+							Q_temp[j] = temp_char ^
+							    (char)
+							    gf_mul((unsigned
+								    char)
+								   temp_buf[j],
+								   data_disk_coeff,
+								   field_power);
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t3, NULL);
+
+							duration =
+							    (t3.tv_sec -
+							     t2.tv_sec) +
+							    (t3.tv_usec -
+							     t2.tv_usec) /
+							    1000000.0;
+							NCFS_DATA->
+							    decoding_time +=
+							    duration;
+						}
+					}
+
+					//calculate D
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t1, NULL);
+					}
+
+					retstat =
+					    cacheLayer->DiskRead(code_disk_id,
+								 temp_buf, size,
+								 offset);
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t2, NULL);
+					}
+
+					for (j = 0; j < size; j++) {
+						temp_char =
+						    (char)(gf_mul
+							   (g2,
+							    (unsigned char)
+							    P_temp[j],
+							    field_power)
+							   ^ Q_temp[j] ^
+							   temp_buf[j]);
+						buf[j] =
+						    (char)gf_div((unsigned char)
+								 temp_char, g12,
+								 field_power);
+					}
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t3, NULL);
+
+						duration =
+						    (t3.tv_sec - t2.tv_sec) +
+						    (t3.tv_usec -
+						     t2.tv_usec) / 1000000.0;
+						NCFS_DATA->decoding_time +=
+						    duration;
+					}
+				}
+			}
+		} else {
+			printf
+			    ("Raid 6 number of failed disks larger than 2.\n");
+			return -1;
+		}
+
+		free(temp_buf);
+		free(P_temp);
+		free(Q_temp);
+		return size;
+	}
+	AbnormalError();
+
+	return -1;
+}
+
+int CodingLayer::decoding_raid6_noRotate(int disk_id, char *buf, long long size,
+				long long offset)
+{
+	int retstat;
+	char *temp_buf;
+	int i;
+	long long j;
+	int disk_failed_no;
+	int disk_another_failed_id;	//id of second failed disk
+
+	int code_disk_id, parity_disk_id;
+	int block_size;
+	long long block_no;
+	int disk_total_num;
+	int data_disk_coeff;
+	char temp_char;
+
+	int g1, g2, g12;
+	char *P_temp;
+	char *Q_temp;
+
+	struct timeval t1, t2, t3;
+	double duration;
+
+	temp_buf = (char *)malloc(sizeof(char) * size);
+	memset(temp_buf, 0, size);
+
+	P_temp = (char *)malloc(sizeof(char) * size);
+	memset(P_temp, 0, size);
+
+	Q_temp = (char *)malloc(sizeof(char) * size);
+	memset(Q_temp, 0, size);
+
+	memset(buf, 0, size);
+	int *inttemp_buf = (int *)temp_buf;
+	int *intbuf = (int *)buf;
+
+	disk_total_num = NCFS_DATA->disk_total_num;
+	block_size = NCFS_DATA->chunk_size;
+	block_no = offset / block_size;
+
+	//dongsheng wei
+	// code_disk_id = disk_total_num - 1 - (block_no % disk_total_num);
+	// parity_disk_id = disk_total_num - 1 - ((block_no + 1) % disk_total_num);
+	code_disk_id = disk_total_num - 1;
+	parity_disk_id = disk_total_num - 2;
+
+	if (NCFS_DATA->disk_status[disk_id] == 0) {
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t1, NULL);
+		}
+
+		retstat = cacheLayer->DiskRead(disk_id, buf, size, offset);
+
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t2, NULL);
+		}
+
+		free(temp_buf);
+		free(P_temp);
+		free(Q_temp);
+
+		return retstat;
+	} else {
+		//check the number of failed disks
+		disk_failed_no = 0;
+		for (i = 0; i < disk_total_num; i++) {
+			if (NCFS_DATA->disk_status[i] == 1) {
+				(disk_failed_no)++;
+				if (i != disk_id) {
+					disk_another_failed_id = i;
+				}
+			}
+		}
+
+		if (((disk_failed_no == 1) && (disk_id != code_disk_id)) ||
+		    ((disk_failed_no == 2)
+		     && (disk_another_failed_id == code_disk_id))) {
+			//case of single non-Q disk fail (D or P), or two-disk (data disk + Q disk) fail (D + Q)
+			for (i = 0; i < disk_total_num; ++i) {
+				if ((i != disk_id) && (i != code_disk_id)) {
+					if (NCFS_DATA->disk_status[i] != 0) {
+						printf
+						    ("Raid 6 both disk %d and %d are failed\n",
+						     disk_id, i);
+						return -1;
+					}
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t1, NULL);
+					}
+
+					retstat =
+					    cacheLayer->DiskRead(i, temp_buf,
+								 size, offset);
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t2, NULL);
+					}
+
+					for (j = 0;
+					     j <
+					     (long long)(size * sizeof(char) /
+							 sizeof(int)); ++j) {
+						intbuf[j] =
+						    intbuf[j] ^ inttemp_buf[j];
+					}
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t3, NULL);
+
+						duration =
+						    (t3.tv_sec - t2.tv_sec) +
+						    (t3.tv_usec -
+						     t2.tv_usec) / 1000000.0;
+						NCFS_DATA->decoding_time +=
+						    duration;
+					}
+				}
+			}
+		} else if (((disk_failed_no == 1) && (disk_id == code_disk_id))
+			   || ((disk_failed_no == 2)
+			       && (disk_id == code_disk_id)
+			       && (disk_another_failed_id == parity_disk_id))) {
+			//case of "single Q disk fails" (Q) or "Q + P disk failure" (Q + P)
+
+			//Calculate Q
+			for (i = 0; i < disk_total_num; i++) {
+				if ((i != parity_disk_id)
+				    && (i != code_disk_id)) {
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t1, NULL);
+					}
+					//Cache Start
+					retstat =
+					    cacheLayer->DiskRead(i, temp_buf,
+								 size, offset);
+					//Cache End
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t2, NULL);
+					}
+
+					for (j = 0; j < size; j++) {
+						//calculate the coefficient of the data block
+						data_disk_coeff = i;
+
+						if (i > code_disk_id) {
+							(data_disk_coeff)--;
+						}
+						if (i > parity_disk_id) {
+							(data_disk_coeff)--;
+						}
+						data_disk_coeff =
+						    disk_total_num - 3 -
+						    data_disk_coeff;
+						data_disk_coeff =
+						    gf_get_coefficient
+						    (data_disk_coeff,
+						     field_power);
+
+						//calculate code block Q
+						buf[j] = buf[j] ^
+						    (char)gf_mul((unsigned char)
+								 temp_buf[j],
+								 data_disk_coeff,
+								 field_power);
+					}
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t3, NULL);
+
+						duration =
+						    (t3.tv_sec - t2.tv_sec) +
+						    (t3.tv_usec -
+						     t2.tv_usec) / 1000000.0;
+						NCFS_DATA->decoding_time +=
+						    duration;
+					}
+				}
+			}
+		} else if (disk_failed_no == 2) {
+			//case of two-disk fail (data disk + non Q disk) (disk_id and disk_second_id)
+			//compute Q' to restore data
+
+			if ((disk_id == parity_disk_id)
+			    && (disk_another_failed_id != code_disk_id)) {
+				//case of P disk + data disk fail (P + D)
+
+				//calculate Q'
+				for (i = 0; i < disk_total_num; i++) {
+					if ((i != disk_id)
+					    && (i != disk_another_failed_id)
+					    && (i != parity_disk_id)
+					    && (i != code_disk_id)) {
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						retstat =
+						    cacheLayer->DiskRead(i,
+									 temp_buf,
+									 size,
+									 offset);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+						//calculate the coefficient of the data block
+						data_disk_coeff = i;
+
+						if (i > code_disk_id) {
+							(data_disk_coeff)--;
+						}
+						if (i > parity_disk_id) {
+							(data_disk_coeff)--;
+						}
+						data_disk_coeff =
+						    disk_total_num - 3 -
+						    data_disk_coeff;
+						data_disk_coeff =
+						    gf_get_coefficient
+						    (data_disk_coeff,
+						     field_power);
+
+						for (j = 0; j < size; j++) {
+							buf[j] = buf[j] ^
+							    (char)
+							    gf_mul((unsigned
+								    char)
+								   temp_buf[j],
+								   data_disk_coeff,
+								   field_power);
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t3, NULL);
+
+							duration =
+							    (t3.tv_sec -
+							     t2.tv_sec) +
+							    (t3.tv_usec -
+							     t2.tv_usec) /
+							    1000000.0;
+							NCFS_DATA->
+							    decoding_time +=
+							    duration;
+						}
+					}
+				}
+
+				//calculate Q xor Q'
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t1, NULL);
+				}
+
+				retstat =
+				    cacheLayer->DiskRead(code_disk_id, temp_buf,
+							 size, offset);
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t2, NULL);
+				}
+
+				for (j = 0; j < size; j++) {
+					buf[j] = buf[j] ^ temp_buf[j];
+				}
+
+				//calculate the coefficient of the data block
+				data_disk_coeff = disk_id;
+
+				if (disk_id > code_disk_id) {
+					(data_disk_coeff)--;
+				}
+				if (disk_id > parity_disk_id) {
+					(data_disk_coeff)--;
+				}
+				data_disk_coeff =
+				    disk_total_num - 3 - data_disk_coeff;
+				data_disk_coeff =
+				    gf_get_coefficient(data_disk_coeff,
+						       field_power);
+
+				//decode the origianl data block
+				for (j = 0; j < size; j++) {
+					temp_char = buf[j];
+					buf[j] =
+					    (char)gf_div((unsigned char)
+							 temp_char,
+							 data_disk_coeff,
+							 field_power);
+				}
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t3, NULL);
+
+					duration = (t3.tv_sec - t2.tv_sec) +
+					    (t3.tv_usec -
+					     t2.tv_usec) / 1000000.0;
+					NCFS_DATA->decoding_time += duration;
+				}
+				//find P
+				for (i = 0; i < disk_total_num; ++i) {
+					if ((i != disk_id)
+					    && (i != code_disk_id)
+					    && (i != disk_another_failed_id)) {
+						if (NCFS_DATA->disk_status[i] !=
+						    0) {
+							printf
+							    ("Raid 6 both disk %d and %d are failed\n",
+							     disk_id, i);
+							return -1;
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						retstat =
+						    cacheLayer->DiskRead(i,
+									 temp_buf,
+									 size,
+									 offset);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+
+						for (j = 0;
+						     j <
+						     (long long)(size *
+								 sizeof(char) /
+								 sizeof(int));
+						     ++j) {
+							intbuf[j] =
+							    intbuf[j] ^
+							    inttemp_buf[j];
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t3, NULL);
+
+							duration =
+							    (t3.tv_sec -
+							     t2.tv_sec) +
+							    (t3.tv_usec -
+							     t2.tv_usec) /
+							    1000000.0;
+							NCFS_DATA->
+							    decoding_time +=
+							    duration;
+						}
+					}
+				}
+			} else if ((disk_id == code_disk_id)
+				   && (disk_another_failed_id !=
+				       parity_disk_id)) {
+				//case of Q disk + data disk fail (Q + D)
+
+				//find D from P
+				for (i = 0; i < disk_total_num; ++i) {
+					if ((i != disk_id)
+					    && (i != disk_another_failed_id)) {
+						if (NCFS_DATA->disk_status[i] !=
+						    0) {
+							printf
+							    ("Raid 6 both disk %d and %d are failed\n",
+							     disk_id, i);
+							return -1;
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						retstat =
+						    cacheLayer->DiskRead(i,
+									 temp_buf,
+									 size,
+									 offset);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+
+						for (j = 0;
+						     j <
+						     (long long)(size *
+								 sizeof(char) /
+								 sizeof(int));
+						     ++j) {
+							intbuf[j] =
+							    intbuf[j] ^
+							    inttemp_buf[j];
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t3, NULL);
+
+							duration =
+							    (t3.tv_sec -
+							     t2.tv_sec) +
+							    (t3.tv_usec -
+							     t2.tv_usec) /
+							    1000000.0;
+							NCFS_DATA->
+							    decoding_time +=
+							    duration;
+						}
+					}
+				}
+
+				//calculate Q
+				for (i = 0; i < disk_total_num; i++) {
+					if ((i != parity_disk_id)
+					    && (i != code_disk_id)) {
+						if (i != disk_another_failed_id) {
+							if (NCFS_DATA->
+							    run_experiment ==
+							    1) {
+								gettimeofday
+								    (&t1, NULL);
+							}
+							//Cache Start
+							retstat =
+							    cacheLayer->
+							    DiskRead(i,
+								     temp_buf,
+								     size,
+								     offset);
+							//Cache End
+
+							if (NCFS_DATA->
+							    run_experiment ==
+							    1) {
+								gettimeofday
+								    (&t2, NULL);
+							}
+						} else {	//use the recovered D
+							for (j = 0; j < size;
+							     j++) {
+								temp_buf[j] =
+								    buf[j];
+							}
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						for (j = 0; j < size; j++) {
+							//calculate the coefficient of the data block
+							data_disk_coeff = i;
+
+							if (i > code_disk_id) {
+								(data_disk_coeff)--;
+							}
+							if (i > parity_disk_id) {
+								(data_disk_coeff)--;
+							}
+							data_disk_coeff =
+							    disk_total_num - 3 -
+							    data_disk_coeff;
+							data_disk_coeff =
+							    gf_get_coefficient
+							    (data_disk_coeff,
+							     field_power);
+
+							//calculate code block Q
+							Q_temp[j] = Q_temp[j] ^
+							    (char)
+							    gf_mul((unsigned
+								    char)
+								   temp_buf[j],
+								   data_disk_coeff,
+								   field_power);
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+					}
+				}
+
+				for (j = 0; j < size; j++) {
+					buf[j] = Q_temp[j];
+				}
+			} else if (disk_another_failed_id == parity_disk_id) {
+				//case of data disk + P disk fail (D + P)
+
+				//calculate Q'
+				for (i = 0; i < disk_total_num; i++) {
+					if ((i != disk_id)
+					    && (i != disk_another_failed_id)
+					    && (i != parity_disk_id)
+					    && (i != code_disk_id)) {
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						retstat =
+						    cacheLayer->DiskRead(i,
+									 temp_buf,
+									 size,
+									 offset);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+						//calculate the coefficient of the data block
+						data_disk_coeff = i;
+
+						if (i > code_disk_id) {
+							(data_disk_coeff)--;
+						}
+						if (i > parity_disk_id) {
+							(data_disk_coeff)--;
+						}
+						data_disk_coeff =
+						    disk_total_num - 3 -
+						    data_disk_coeff;
+						data_disk_coeff =
+						    gf_get_coefficient
+						    (data_disk_coeff,
+						     field_power);
+
+						for (j = 0; j < size; j++) {
+							temp_char = buf[j];
+							buf[j] = buf[j] ^
+							    (char)
+							    gf_mul((unsigned
+								    char)
+								   temp_buf[j],
+								   data_disk_coeff,
+								   field_power);
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t3, NULL);
+
+							duration =
+							    (t3.tv_sec -
+							     t2.tv_sec) +
+							    (t3.tv_usec -
+							     t2.tv_usec) /
+							    1000000.0;
+							NCFS_DATA->
+							    decoding_time +=
+							    duration;
+						}
+					}
+				}
+
+				//calculate Q xor Q'
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t1, NULL);
+				}
+
+				retstat =
+				    cacheLayer->DiskRead(code_disk_id, temp_buf,
+							 size, offset);
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t2, NULL);
+				}
+
+				for (j = 0; j < size; j++) {
+					buf[j] = buf[j] ^ temp_buf[j];
+				}
+
+				//calculate the coefficient of the data block
+				data_disk_coeff = disk_id;
+
+				if (disk_id > code_disk_id) {
+					(data_disk_coeff)--;
+				}
+				if (disk_id > parity_disk_id) {
+					(data_disk_coeff)--;
+				}
+				data_disk_coeff =
+				    disk_total_num - 3 - data_disk_coeff;
+				data_disk_coeff =
+				    gf_get_coefficient(data_disk_coeff,
+						       field_power);
+
+				//decode the origianl data block
+				for (j = 0; j < size; j++) {
+					temp_char = buf[j];
+					buf[j] =
+					    (char)gf_div((unsigned char)
+							 temp_char,
+							 data_disk_coeff,
+							 field_power);
+				}
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t3, NULL);
+
+					duration = (t3.tv_sec - t2.tv_sec) +
+					    (t3.tv_usec -
+					     t2.tv_usec) / 1000000.0;
+					NCFS_DATA->decoding_time += duration;
+				}
+				//return retstat;
+			} else {
+				// two data disk fail (D + D)
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t1, NULL);
+				}
+				//calculate g1
+				g1 = disk_id;
+				if (g1 > code_disk_id) {
+					(g1)--;
+				}
+				if (g1 > parity_disk_id) {
+					(g1)--;
+				}
+				g1 = disk_total_num - 3 - g1;
+				g1 = gf_get_coefficient(g1, field_power);
+
+				//calculate g2
+				g2 = disk_another_failed_id;
+				if (g2 > code_disk_id) {
+					(g2)--;
+				}
+				if (g2 > parity_disk_id) {
+					(g2)--;
+				}
+				g2 = disk_total_num - 3 - g2;
+				g2 = gf_get_coefficient(g2, field_power);
+
+				//calculate g12
+				g12 = g1 ^ g2;
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t2, NULL);
+
+					duration = (t2.tv_sec - t1.tv_sec) +
+					    (t2.tv_usec -
+					     t1.tv_usec) / 1000000.0;
+					NCFS_DATA->decoding_time += duration;
+				}
+
+				for (i = 0; i < disk_total_num; i++) {
+					if ((i != disk_id)
+					    && (i != disk_another_failed_id)
+					    && (i != parity_disk_id)
+					    && (i != code_disk_id)) {
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						retstat =
+						    cacheLayer->DiskRead(i,
+									 temp_buf,
+									 size,
+									 offset);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+
+						for (j = 0; j < size; j++) {
+							P_temp[j] =
+							    P_temp[j] ^
+							    temp_buf[j];
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t3, NULL);
+
+							duration =
+							    (t3.tv_sec -
+							     t2.tv_sec) +
+							    (t3.tv_usec -
+							     t2.tv_usec) /
+							    1000000.0;
+							NCFS_DATA->
+							    decoding_time +=
+							    duration;
+						}
+					}
+				}
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t1, NULL);
+				}
+
+				retstat =
+				    cacheLayer->DiskRead(parity_disk_id,
+							 temp_buf, size,
+							 offset);
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t2, NULL);
+				}
+
+				for (j = 0; j < size; j++) {
+					P_temp[j] = P_temp[j] ^ temp_buf[j];
+					//P_temp = P' xor P
+				}
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t3, NULL);
+
+					duration = (t3.tv_sec - t2.tv_sec) +
+					    (t3.tv_usec -
+					     t2.tv_usec) / 1000000.0;
+					NCFS_DATA->decoding_time += duration;
+				}
+				for (i = 0; i < disk_total_num; i++) {
+					if (((i != disk_id)
+					     && (i != disk_another_failed_id))
+					    && (i != parity_disk_id)
+					    && (i != code_disk_id)) {
+
+						//calculate the coefficient of the data block
+						data_disk_coeff = i;
+
+						if (i > code_disk_id) {
+							(data_disk_coeff)--;
+						}
+						if (i > parity_disk_id) {
+							(data_disk_coeff)--;
+						}
+						data_disk_coeff =
+						    disk_total_num - 3 -
+						    data_disk_coeff;
+						data_disk_coeff =
+						    gf_get_coefficient
+						    (data_disk_coeff,
+						     field_power);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t1, NULL);
+						}
+
+						retstat =
+						    cacheLayer->DiskRead(i,
+									 temp_buf,
+									 size,
+									 offset);
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t2, NULL);
+						}
+
+						for (j = 0; j < size; j++) {
+							temp_char = Q_temp[j];
+							Q_temp[j] = temp_char ^
+							    (char)
+							    gf_mul((unsigned
+								    char)
+								   temp_buf[j],
+								   data_disk_coeff,
+								   field_power);
+						}
+
+						if (NCFS_DATA->run_experiment ==
+						    1) {
+							gettimeofday(&t3, NULL);
+
+							duration =
+							    (t3.tv_sec -
+							     t2.tv_sec) +
+							    (t3.tv_usec -
+							     t2.tv_usec) /
+							    1000000.0;
+							NCFS_DATA->
+							    decoding_time +=
+							    duration;
+						}
+					}
+
+					//calculate D
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t1, NULL);
+					}
+
+					retstat =
+					    cacheLayer->DiskRead(code_disk_id,
+								 temp_buf, size,
+								 offset);
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t2, NULL);
+					}
+
+					for (j = 0; j < size; j++) {
+						temp_char =
+						    (char)(gf_mul
+							   (g2,
+							    (unsigned char)
+							    P_temp[j],
+							    field_power)
+							   ^ Q_temp[j] ^
+							   temp_buf[j]);
+						buf[j] =
+						    (char)gf_div((unsigned char)
+								 temp_char, g12,
+								 field_power);
+					}
+
+					if (NCFS_DATA->run_experiment == 1) {
+						gettimeofday(&t3, NULL);
+
+						duration =
+						    (t3.tv_sec - t2.tv_sec) +
+						    (t3.tv_usec -
+						     t2.tv_usec) / 1000000.0;
+						NCFS_DATA->decoding_time +=
+						    duration;
+					}
+				}
+			}
+		} else {
+			printf
+			    ("Raid 6 number of failed disks larger than 2.\n");
+			return -1;
+		}
+
+		free(temp_buf);
+		free(P_temp);
+		free(Q_temp);
+		return size;
+	}
+	AbnormalError();
+
+	return -1;
+}
+
+int CodingLayer::decoding_raid5_noRotate(int disk_id, char *buf, long long size,
+				long long offset)
+{
+	//RAID 5 with no rotate
+	int retstat;
+	struct timeval t1, t2, t3;
+	double duration;
+
+	if (NCFS_DATA->disk_status[disk_id] == 0) {
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t1, NULL);
+		}
+
+		retstat = cacheLayer->DiskRead(disk_id, buf, size, offset);
+
+		if (NCFS_DATA->run_experiment == 1) {
+			gettimeofday(&t2, NULL);
+		}
+
+		return retstat;
+	} else {
+		char *temp_buf;
+		int i;
+		long long j;
+		temp_buf = (char *)malloc(sizeof(char) * size);
+		memset(temp_buf, 0, size);
+		memset(buf, 0, size);
+		int *inttemp_buf = (int *)temp_buf;
+		int *intbuf = (int *)buf;
+		for (i = 0; i < NCFS_DATA->disk_total_num; ++i) {
+			if (i != disk_id) {
+				if (NCFS_DATA->disk_status[i] != 0) {
+					printf
+					    ("Raid 5 both disk %d and %d are failed\n",
+					     disk_id, i);
+					free(temp_buf);
+					return -1;
+				}
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t1, NULL);
+				}
+
+				retstat =
+				    cacheLayer->DiskRead(i, temp_buf, size,
+							 offset);
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t2, NULL);
+				}
+
+				for (j = 0;
+				     j <
+				     (long long)(size * sizeof(char) /
+						 sizeof(int)); ++j)
+					intbuf[j] = intbuf[j] ^ inttemp_buf[j];
+
+				if (NCFS_DATA->run_experiment == 1) {
+					gettimeofday(&t3, NULL);
+
+					duration = (t3.tv_sec - t2.tv_sec) +
+					    (t3.tv_usec -
+					     t2.tv_usec) / 1000000.0;
+					NCFS_DATA->decoding_time += duration;
+				}
+			}
+		}
+		free(temp_buf);
+		return size;
+	}
+	AbnormalError();
+	return -1;
+}
+//Add by Dongsheng Wei on Jan. 16, 2014 end.
+
+
 /*
  * decoding_mbr: MBR decode
  *
@@ -2942,7 +5385,21 @@ CodingLayer::CodingLayer()
 		gf_gen_tables(field_power);
 		//generate GF tables for raid6
 	}
+
+	//Add by Dongsheng Wei on Jan. 16, 2014 begin.
+	if(coding_type == 5000){
+		mdr_I_encoding_matrixB = mdr_I_encoding_matrix(NCFS_DATA->data_disk_num);
+		strip_size = (int)pow(2, NCFS_DATA->data_disk_num);
+	}
+	//Add by Dongsheng Wei on Jan. 16, 2014 end.
 }
+
+//Add by Dongsheng Wei on Jan. 16, 2014 begin.
+CodingLayer :: ~CodingLayer(){
+	if(NCFS_DATA->disk_raid_type == 5000)
+		delete []mdr_I_encoding_matrixB;
+}
+//Add by Dongsheng Wei on Jan. 16, 2014 end.
 
 /*
  * encode: Write data to disk and return written block info
@@ -2981,6 +5438,17 @@ struct data_block_info CodingLayer::encode(const char *buf, int size)
 	case 3000:
 		block_written = encoding_rs(buf, size);
 		break;
+	//Add by Dongsheng Wei on Jan. 16, 2014 begin.
+	case 5000:
+		block_written = encoding_mdr_I(buf, size);
+		break;
+	case 5001:
+		block_written = encoding_raid5_noRotate(buf, size);
+		break;
+	case 6001:
+		block_written = encoding_raid6_noRotate(buf, size);
+		break;
+	//Add by Dongsheng Wei on Jan. 16, 2014 end.
 	default:
 		return encoding_default(buf, size);
 		break;
@@ -3032,6 +5500,17 @@ int CodingLayer::decode(int disk_id, char *buf, long long size,
 	case 3000:
 		return decoding_rs(disk_id, buf, size, offset);
 		break;
+	//Add by Dongsheng Wei on Jan. 16, 2014 begin.
+	case 5000:
+		return decoding_mdr_I(disk_id, buf, size, offset);
+		break;
+	case 5001:
+		return decoding_raid5_noRotate(disk_id, buf, size, offset);
+		break;
+	case 6001:
+		return decoding_raid6_noRotate(disk_id, buf, size, offset);
+		break;
+	//Add by Dongsheng Wei on Jan. 16, 2014 end;
 	default:
 		return decoding_default(disk_id, buf, size, offset);
 		break;
