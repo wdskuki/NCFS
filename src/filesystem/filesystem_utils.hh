@@ -32,6 +32,9 @@ class FileSystemLayer {
 	void readSystemConfig(struct ncfs_state* ncfs_data);
 	//Add by zhuyunfeng on October 11, 2011 end.
 
+	//Add by Dongsheng Wei on Jan. 10, 2014 begin.
+	void print_device_setting_withInput(ncfs_state* );
+	//Add by Dongsheng Wei on Jan. 10, 2014 begin.
 };
 
 #endif

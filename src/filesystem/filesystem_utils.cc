@@ -529,6 +529,26 @@ void FileSystemLayer::print_device_setting(void)
 	printf("Disk Write time: %lf\n", NCFS_DATA->diskwrite_time);
 }
 
+//Add by Dongsheng Wei on Jan. 10, 2014 begin.
+void FileSystemLayer::print_device_setting_withInput(ncfs_state *NCFS_DATA)
+{
+	printf("\n\nOperation mode: %d\n", NCFS_DATA->operation_mode);
+	for (int i = 0; i < NCFS_DATA->disk_total_num; ++i) {
+		printf("\n Disk %d \n", i);
+		printf("=============\n");
+		printf("Name: %s\n", NCFS_DATA->dev_name[i]);
+		printf("Free Size: %d\n", NCFS_DATA->free_size[i]);
+		printf("Free Offset: %d\n", NCFS_DATA->free_offset[i]);
+		printf("Status: %d\n", NCFS_DATA->disk_status[i]);
+	}
+	printf("=============\n");
+	printf("Encoding time: %lf\n", NCFS_DATA->encoding_time);
+	printf("Decoding time: %lf\n", NCFS_DATA->decoding_time);
+	printf("Disk Read time: %lf\n", NCFS_DATA->diskread_time);
+	printf("Disk Write time: %lf\n", NCFS_DATA->diskwrite_time);
+}
+//Add by Dongsheng Wei on Jan. 10, 2014 end.
+
 int FileSystemLayer::get_fail_num(void)
 {
 	int count = 0;
@@ -657,7 +677,6 @@ void FileSystemLayer::readSystemConfig(struct ncfs_state* ncfs_data)
 		memset(tempString,0,256);
 		sprintf(tempString,"%sFreeSize",targetDisk);
 		ncfs_data->free_size[i] = configLayer->getConfigLong(tempString);
-		
 	}
 	
 }

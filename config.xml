@@ -4,39 +4,50 @@
 		<Setting>
 			<NoCache>1</NoCache>
 			<NoGui>1</NoGui>
-			<Experiment>0</Experiment>
+			<Experiment>1</Experiment>
 		</Setting>
 		<Disk>
-			<TotalDiskNumber>3</TotalDiskNumber>
-			<DataDiskNumber>2</DataDiskNumber>
+			<TotalDiskNumber>5</TotalDiskNumber>
+			<DataDiskNumber>3</DataDiskNumber>
 			<ChunkSize>8192</ChunkSize>
-			<RaidType>5</RaidType>
+			<RaidType>5000</RaidType>
 			<DiskSetting>
 				<Disk1>
 					<DevName>/dev/loop1</DevName>
-					<TotalSize>20971520</TotalSize>
+					<TotalSize>15728640</TotalSize>
 					<FreeOffset>0</FreeOffset>
-					<FreeSize>20971520</FreeSize>
+					<FreeSize>15728640</FreeSize>
 				</Disk1>
 				<Disk2>
 					<DevName>/dev/loop2</DevName>
-					<TotalSize>20971520</TotalSize>
+					<TotalSize>15728640</TotalSize>
 					<FreeOffset>0</FreeOffset>
-					<FreeSize>20971520</FreeSize>
+					<FreeSize>15728640</FreeSize>
 				</Disk2>
 				<Disk3>
 					<DevName>/dev/loop3</DevName>
-					<TotalSize>20971520</TotalSize>
+					<TotalSize>15728640</TotalSize>
 					<FreeOffset>0</FreeOffset>
-					<FreeSize>20971520</FreeSize>
+					<FreeSize>15728640</FreeSize>
 				</Disk3>
-
+				<Disk4>
+					<DevName>/dev/loop4</DevName>
+					<TotalSize>15728640</TotalSize>
+					<FreeOffset>0</FreeOffset>
+					<FreeSize>15728640</FreeSize>
+				</Disk4>
+				<Disk5>
+					<DevName>/dev/loop5</DevName>
+					<TotalSize>15728640</TotalSize>
+					<FreeOffset>0</FreeOffset>
+					<FreeSize>15728640</FreeSize>
+				</Disk5>
 			</DiskSetting>
 		</Disk>
 	</FileSystem>
 	<Cache>
 		<ThreadPool>
-			<NumOfThread>3</NumOfThread>
+			<NumOfThread>5</NumOfThread>
 		</ThreadPool>
 		<FileCache>
 			<BufferSize>2097152</BufferSize>
