@@ -10,6 +10,10 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/time.h>
+#include <math.h>
+
+#include <vector>
+using namespace std;
 
 extern "C" {
 #include "../jerasure/galois.h"
@@ -309,6 +313,118 @@ int CodingLayer::mbr_get_dup_block_no(int disk_id, int mbr_block_id,
 
 	return dup_block_no;
 }
+
+//MDR_I operation
+//Add by Dongsheng Wei on Jan. 17, 2014 begin.
+long long* CodingLayer::mdr_I_iterative_construct_encoding_matrixB(long long *matrix, 
+												int k){
+	int i, j, t;
+	int row = (int)pow(2, k);
+	int col = k+1;
+	int len = row * col;
+	
+	int new_k = k+1;
+	int new_row = (int)pow(2, new_k);
+	int new_col = new_k+1;
+	int new_len = new_row * new_col;
+
+	long long * new_matrix = new long long [new_len];
+	if(new_k == 1 && matrix == NULL){
+		new_matrix[0] = 1;
+		new_matrix[1] = 0;
+		new_matrix[2] = 0;
+		new_matrix[3] = 2;
+		return new_matrix;
+	}else{
+		for(i = 0; i < new_col; i++){
+			if(i < new_col-2){
+				for(j = 0; j < row; j++){
+					new_matrix[j*new_col+i] = (matrix[j*col+i] 
+						^ matrix[j*col+col-1]) << row;
+				}
+				for(j = row; j < new_row; j++){
+					new_matrix[j*new_col+i] = (matrix[(j-row)*col+i] 
+						^ matrix[(j-row)*col+col-1]);
+				}
+			}else if(i == new_col-2){
+				t = 0;
+				for(j = row-1; j >= 0; j--){
+					new_matrix[j*new_col+i] = 1 << t;
+					t++;
+				}
+				for(j = row; j < new_row; j++){
+					new_matrix[j*new_col+i] = 0;
+				}
+			}else if(i == new_col-1){
+				for(j = 0; j < row; j++){
+					new_matrix[j*new_col+i] = 0;
+				}			
+				for(j = new_row-1; j >= row; j--){
+					new_matrix[j*new_col+i] = 1 << t;
+					t++;
+				}
+			}
+		}
+		//free(matrix);
+		delete []matrix;
+
+		return new_matrix;
+	}
+}
+
+void CodingLayer::mdr_print_matrix(long long* matrix, int row, int col){
+	for(int i = 0; i < row; i++){
+		for(int j = 0; j < col; j++)
+			printf("%lld\t",matrix[i*col+j]);
+		printf("\n");
+	}
+}
+
+long long* CodingLayer::mdr_I_encoding_matrix(int k){ 
+	int count;
+	long long *mdr_encoding_matrix_B;
+	if(k <= 0){
+		printf("error: k\n");
+		exit(1);
+	}
+	
+	mdr_encoding_matrix_B = new long long [4];
+
+	mdr_encoding_matrix_B[0] = 1;
+	mdr_encoding_matrix_B[1] = 0;
+	mdr_encoding_matrix_B[2] = 0;
+	mdr_encoding_matrix_B[3] = 2;	
+	if(k == 1)
+		return mdr_encoding_matrix_B;
+
+	count = 1;
+	while(count != k){
+		mdr_encoding_matrix_B = 
+			mdr_I_iterative_construct_encoding_matrixB(
+				mdr_encoding_matrix_B, count);
+		count++;
+	}
+	return mdr_encoding_matrix_B;
+}
+
+vector<int> CodingLayer::mdr_I_find_q_blocks_id(int disk_id, int block_no){
+	vector<int> ivec;
+
+	int row = strip_size;
+	int col = NCFS_DATA->data_disk_num + 1;
+
+	int t = 1 << (strip_size - block_no -1);
+	for(int i = 0; i < row; i++){
+		if((mdr_I_encoding_matrixB[i*col+disk_id]&t) != 0){
+			ivec.push_back(i);
+		}
+	}
+	return ivec;
+}
+
+//Add by Dongsheng Wei on Jan. 17, 2014 end.
+
+
 
 /*************************************************************************
  * Encoding functions
@@ -1018,6 +1134,9 @@ struct data_block_info CodingLayer::encoding_mdr_I(const char *buf, int size)
 	char *buf2, *buf3, *buf_read;
 	//dongsheng wei
 	char *buf_parity_disk, *buf_code_disk;
+	int data_disk_num;
+	vector<int> q_blocks_no;
+//	int strip_size;
 	//dongsheng wei
 	char temp_char;
 	int data_disk_coeff;
@@ -1033,6 +1152,11 @@ struct data_block_info CodingLayer::encoding_mdr_I(const char *buf, int size)
 
 	size_request = fileSystemLayer->round_to_block_size(size);
 	block_request = size_request / block_size;
+
+	data_disk_num = disk_total_num - 2;
+
+
+
 
 	//implement disk write algorithm here.
 	//here use raid6.
@@ -1068,8 +1192,10 @@ struct data_block_info CodingLayer::encoding_mdr_I(const char *buf, int size)
 	if(disk_id == 0){
 		(NCFS_DATA->free_offset[disk_total_num-2])++;
 		(NCFS_DATA->free_size[disk_total_num-2])--;
-		(NCFS_DATA->free_offset[disk_total_num-1])++;
-		(NCFS_DATA->free_size[disk_total_num-1])--;
+		if(block_no % strip_size == 0){
+			(NCFS_DATA->free_offset[disk_total_num-1]) += strip_size;
+			(NCFS_DATA->free_size[disk_total_num-1]) -= strip_size;
+		}
 	}
 
 	//get block from space_list if no free block available
@@ -1090,186 +1216,96 @@ struct data_block_info CodingLayer::encoding_mdr_I(const char *buf, int size)
 		NCFS_DATA->free_size[disk_id]
 		    = NCFS_DATA->free_size[disk_id] - block_request;
 
-		code_disk_id = disk_total_num - 1;
-		parity_disk_id = disk_total_num - 2;
-
+		int p_disk_id = disk_total_num - 2;
+		int q_disk_id = disk_total_num - 1;
+		
 
 		// //dongsheng wei
-		// buf_code_disk = (char *)malloc(sizeof(char) * size_request);
-		// buf_parity_disk = (char *)malloc(sizeof(char) * size_request);
-
-
-
-		// buf_code_disk = (char *)malloc(sizeof(char) * size_request);
-		// buf_parity_disk = (char *)malloc(sizeof(char) * size_request);
-		
-		// if (NCFS_DATA->run_experiment == 1) gettimeofday(&t1, NULL);
-		
-		// retstat = cacheLayer->DiskRead(code_disk_id, buf_code_disk, 
-		// 	size_request, block_no * block_size);
-		// retstat = cacheLayer->DiskRead(parity_disk_id, buf_parity_disk, 
-		// 	size_request, block_no * block_size);		
-		
-		// if (NCFS_DATA->run_experiment == 1) gettimeofday(&t2, NULL);
+		char* buf_p_disk = (char *)malloc(sizeof(char) * size_request);
+		char* buf_q_disk = (char *)malloc(sizeof(char) * size_request);
 
 		
-
-		// if (NCFS_DATA->run_experiment == 1) gettimeofday(&t3, NULL);
-		// //calculate P
-		// for (j = 0; j < size_request; j++) {
-		// 	buf_code_disk[j] = buf_code_disk[j] ^ buf[j];
-		// }
-		// //calculate Q
-		// for (j = 0; j < size_request; j++){
-		// 	//calculate the coefficient of the data block
-		// 	data_disk_coeff = disk_id;
-		// 	if (disk_id > code_disk_id) {
-		// 		(data_disk_coeff)--;
-		// 	}
-		// 	if (disk_id > parity_disk_id) {
-		// 		(data_disk_coeff)--;
-		// 	}
-		// 	data_disk_coeff = disk_total_num - 3 - data_disk_coeff;
-		// 	data_disk_coeff = gf_get_coefficient(data_disk_coeff, field_power);			
-		// 	//calculate code block Q
-		// 	temp_char = buf_parity_disk[j];
-		// 	buf_parity_disk[j] = temp_char ^ (char)gf_mul((unsigned char)
-		// 		buf[j],data_disk_coeff, field_power);
-		// }
-		// if (NCFS_DATA->run_experiment == 1) gettimeofday(&t4, NULL);
-
-
-		// if (NCFS_DATA->run_experiment == 1) gettimeofday(&t5, NULL);
-
-		// retstat = cacheLayer->DiskWrite(disk_id, buf, size, 
-		// 	block_no * block_size);		
-		// retstat = cacheLayer->DiskWrite(code_disk_id, buf_code_disk, 
-		// 	size, block_no * block_size);
-		// retstat = cacheLayer->DiskWrite(parity_disk_id, buf_parity_disk, 
-		// 	size, block_no * block_size);		
-
-		// if (NCFS_DATA->run_experiment == 1) gettimeofday(&t6, NULL);
-
-
-		// duration = (t2.tv_sec - t1.tv_sec) + 
-		// 		(t2.tv_usec - t1.tv_usec) / 1000000.0;
-		// NCFS_DATA->diskread_time += duration;
-
-		// duration = (t4.tv_sec - t3.tv_sec) + 
-		// 		(t4.tv_usec - t3.tv_usec) / 1000000.0;
-		// NCFS_DATA->encoding_time += duration;
+		//read P block
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t1, NULL);
+		retstat = cacheLayer->DiskRead(p_disk_id, buf_p_disk, 
+			size_request, block_no * block_size);	
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t2, NULL);
+		duration = (t2.tv_sec - t1.tv_sec) + 
+				(t2.tv_usec - t1.tv_usec) / 1000000.0;
+		NCFS_DATA->diskread_time += duration;		
 		
-		// duration = (t6.tv_sec - t5.tv_sec) + 
-		// 		(t6.tv_usec - t5.tv_usec) / 1000000.0;
-		// NCFS_DATA->encoding_time += duration;		
-
-		// free(buf_code_disk);
-		// free(buf_parity_disk);
-
-
-
-
-		buf_read = (char *)malloc(sizeof(char) * size_request);
-		buf2 = (char *)malloc(sizeof(char) * size_request);
-		memset(buf2, 0, size_request);
-		buf3 = (char *)malloc(sizeof(char) * size_request);
-		memset(buf3, 0, size_request);
-
-		if (NCFS_DATA->run_experiment == 1) {
-			gettimeofday(&t1, NULL);
+		//calculate new P block
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t1, NULL);
+		for (j = 0; j < size_request; j++) {
+			buf_p_disk[j] = buf_p_disk[j] ^ buf[j];
 		}
-		// Cache Start
-		retstat =
-		    cacheLayer->DiskWrite(disk_id, buf, size,
-					  block_no * block_size);
-		// Cache End
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t2, NULL);
+		duration = (t2.tv_sec - t1.tv_sec) + 
+				(t2.tv_usec - t1.tv_usec) / 1000000.0;
+		NCFS_DATA->encoding_time += duration;	
 
-		if (NCFS_DATA->run_experiment == 1) {
-			gettimeofday(&t2, NULL);
-		}
+		//write new P block
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t1, NULL);
+		retstat = cacheLayer->DiskWrite(p_disk_id, buf_p_disk, size, 
+			block_no * block_size);	
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t2, NULL);
+		duration = (t2.tv_sec - t1.tv_sec) + 
+				(t2.tv_usec - t1.tv_usec) / 1000000.0;
+		NCFS_DATA->diskwrite_time += duration;		
 
-		//dongsheng wei
-		// code_disk_id = disk_total_num - 1 - (block_no % disk_total_num);
-		// parity_disk_id =
-		//     disk_total_num - 1 - ((block_no + 1) % disk_total_num);
 
 
-		for (i = 0; i < disk_total_num; i++) {
-			if ((i != parity_disk_id) && (i != code_disk_id)) {
+		//read Q block
+		int strip_num = block_no / strip_size;
+		int strip_offset = block_no % strip_size;
 
-				if (NCFS_DATA->run_experiment == 1) {
-					gettimeofday(&t1, NULL);
-				}
-				//Cache Start
-				retstat = cacheLayer->DiskRead(i, buf_read,
-							       size_request,
-							       block_no *
-							       block_size);
-				//Cache End
+		q_blocks_no = mdr_I_find_q_blocks_id(disk_id, strip_offset);
+		int q_blk_num = q_blocks_no.size();
+		for(i = 0; i < q_blk_num; i++){
+			int q_blk_no = q_blocks_no[i] + strip_num * strip_size;
 
-				if (NCFS_DATA->run_experiment == 1) {
-					gettimeofday(&t2, NULL);
-				}
+			//read Q blk
+			memset(buf_q_disk, 0, size_request);
+			if (NCFS_DATA->run_experiment == 1) gettimeofday(&t3, NULL);
+			retstat = cacheLayer->DiskRead(q_disk_id, buf_q_disk, 
+				size_request, block_no * block_size);	
+			if (NCFS_DATA->run_experiment == 1) gettimeofday(&t4, NULL);
+			duration = (t4.tv_sec - t3.tv_sec) + 
+					(t4.tv_usec - t3.tv_usec) / 1000000.0;
+			NCFS_DATA->diskread_time += duration;
 
-				for (j = 0; j < size_request; j++) {
-					//Calculate parity block P
-					buf2[j] = buf2[j] ^ buf_read[j];
-
-					//calculate the coefficient of the data block
-					data_disk_coeff = i;
-
-					if (i > code_disk_id) {
-						(data_disk_coeff)--;
-					}
-					if (i > parity_disk_id) {
-						(data_disk_coeff)--;
-					}
-					data_disk_coeff =
-					    disk_total_num - 3 -
-					    data_disk_coeff;
-					data_disk_coeff =
-					    gf_get_coefficient(data_disk_coeff,
-							       field_power);
-
-					//calculate code block Q
-					temp_char = buf3[j];
-					buf3[j] = temp_char ^
-					    (char)gf_mul((unsigned char)
-							 buf_read[j],
-							 data_disk_coeff,
-							 field_power);
-				}
-
-				if (NCFS_DATA->run_experiment == 1) {
-					gettimeofday(&t3, NULL);
-
-					duration = (t3.tv_sec - t2.tv_sec) +
-					    (t3.tv_usec -
-					     t2.tv_usec) / 1000000.0;
-					NCFS_DATA->encoding_time += duration;
-				}
+			//calculate new Q blk
+			if (NCFS_DATA->run_experiment == 1) gettimeofday(&t3, NULL);
+			for (j = 0; j < size_request; j++) {
+				buf_q_disk[j] = buf_q_disk[j] ^ buf[j];
 			}
+			if (NCFS_DATA->run_experiment == 1) gettimeofday(&t4, NULL);
+			duration = (t4.tv_sec - t3.tv_sec) + 
+					(t4.tv_usec - t3.tv_usec) / 1000000.0;
+			NCFS_DATA->encoding_time += duration;
+
+			//write new Q blk
+			if (NCFS_DATA->run_experiment == 1) gettimeofday(&t3, NULL);
+			retstat = cacheLayer->DiskWrite(q_disk_id, buf_q_disk, size, 
+				block_no * block_size);	
+			if (NCFS_DATA->run_experiment == 1) gettimeofday(&t4, NULL);
+			duration = (t4.tv_sec - t3.tv_sec) + 
+					(t4.tv_usec - t3.tv_usec) / 1000000.0;
+			NCFS_DATA->diskwrite_time += duration;				
 		}
 
-		if (NCFS_DATA->run_experiment == 1) {
-			gettimeofday(&t1, NULL);
-		}
-		// Cache Start
-		retstat =
-		    cacheLayer->DiskWrite(parity_disk_id, buf2, size,
-					  block_no * block_size);
-		retstat =
-		    cacheLayer->DiskWrite(code_disk_id, buf3, size,
-					  block_no * block_size);
-		// Cache End
 
-		if (NCFS_DATA->run_experiment == 1) {
-			gettimeofday(&t2, NULL);
-		}
+		//write buf
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t5, NULL);
+		retstat = cacheLayer->DiskWrite(disk_id, buf, size, 
+			block_no * block_size);	
+		if (NCFS_DATA->run_experiment == 1) gettimeofday(&t6, NULL);
+		duration = (t6.tv_sec - t5.tv_sec) + 
+				(t6.tv_usec - t5.tv_usec) / 1000000.0;
+		NCFS_DATA->diskwrite_time += duration;				
 
-		free(buf_read);
-		free(buf2);
-		free(buf3);
+		free(buf_p_disk);
+		free(buf_q_disk);
 	}
 
 	block_written.disk_id = disk_id;
@@ -5349,7 +5385,21 @@ CodingLayer::CodingLayer()
 		gf_gen_tables(field_power);
 		//generate GF tables for raid6
 	}
+
+	//Add by Dongsheng Wei on Jan. 16, 2014 begin.
+	if(coding_type == 5000){
+		mdr_I_encoding_matrixB = mdr_I_encoding_matrix(NCFS_DATA->data_disk_num);
+		strip_size = (int)pow(2, NCFS_DATA->data_disk_num);
+	}
+	//Add by Dongsheng Wei on Jan. 16, 2014 end.
 }
+
+//Add by Dongsheng Wei on Jan. 16, 2014 begin.
+CodingLayer :: ~CodingLayer(){
+	if(NCFS_DATA->disk_raid_type == 5000)
+		delete []mdr_I_encoding_matrixB;
+}
+//Add by Dongsheng Wei on Jan. 16, 2014 end.
 
 /*
  * encode: Write data to disk and return written block info

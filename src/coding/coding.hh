@@ -2,7 +2,8 @@
 #define __CODING_HH__
 
 #include "../filesystem/filesystem_common.hh"
-
+#include <vector>
+using namespace std;
 class CodingLayer {
 
  private:
@@ -29,6 +30,17 @@ class CodingLayer {
 	int mbr_get_dup_block_no(int disk_id, int mbr_block_id,
 				 int mbr_segment_size);
 
+	//MDR_I operation
+	//Add by Dongsheng Wei on Jan. 17, 2014 begin.
+	long long* mdr_I_encoding_matrixB;
+	int strip_size;
+	long long* mdr_I_iterative_construct_encoding_matrixB(long long *matrix, int k);
+	long long* mdr_I_encoding_matrix(int k);
+	void mdr_print_matrix(long long* matrix, int row, int col);	
+	vector<int> mdr_I_find_q_blocks_id(int disk_id, int block_no);
+
+	//Add by Dongsheng Wei on Jan. 17, 2014 end.	
+	
 	//encoding
 	struct data_block_info encoding_default(const char *buf, int size);
 	struct data_block_info encoding_jbod(const char *buf, int size);
@@ -75,6 +87,7 @@ class CodingLayer {
 
  public:
 	 CodingLayer();
+	 ~CodingLayer();
 	struct data_block_info encode(const char *buf, int size);
 	int decode(int disk_id, char *buf, long long size, long long offset);
 };
