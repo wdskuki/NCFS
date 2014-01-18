@@ -3388,6 +3388,11 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 					// print_ivmap(mdr_I_one_dpDisk_fail_nonStripeIndex, mdr_I_one_dpDisk_fail_stripeIndex);
 
 					vector<vector<int> > iivec = mdr_I_one_dpDisk_fail_nonStripeIndex[strip_offset];
+
+					cout<<"iivec:\n";
+					print_iivec(iivec);
+
+					
 					int iivec_size = iivec.size();
 					//cout<<"iivec_size = "<<iivec_size<<endl;
 
