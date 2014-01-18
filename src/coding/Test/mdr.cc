@@ -115,6 +115,22 @@ vector<int> mdr_I_find_parity_blocks_id(int disk_id, int block_no){
 	return ivec;
 }
 
+vector<vector<int> > mdr_I_repair_qDisk_blocks_id(int block_no){
+	vector<vector<int> > iivec;
+	int row = strip_size;
+	int col = k+1;
+	for(int i = 0; i < col; i++){
+		vector<int> ivec;
+		for(int j = 0; j < strip_size; j++){
+			if((matrixB[block_no*col+i]&(1<<(strip_size-j-1))) != 0){
+				ivec.push_back(j);
+			}
+		}
+		iivec.push_back(ivec);
+	}
+	return iivec;
+}
+
 void print_ivec(vector<int>& ivec){
 	int size = ivec.size();
 	for(int i = 0; i < size; i++){
@@ -122,9 +138,23 @@ void print_ivec(vector<int>& ivec){
 	}
 	cout<<endl;
 }
+
+void print_iivec(vector<vector<int> >& iivec){
+	int iivec_size = iivec.size();
+	for(int i = 0; i < iivec_size; i++){
+		int ivec_size = iivec[i].size();
+		cout<<"--";
+		for(int j = 0; j < ivec_size; j++){
+			cout<<iivec[i][j]<<" ";
+		}
+		cout<<endl;
+	}
+	cout<<endl;
+}
 int main(int argc, char const *argv[])
 {
 	vector<int> ivec;
+	vector<vector<int> > iivec;
 	k = 3;
 	strip_size = (int)pow(2, k);
 
@@ -142,7 +172,18 @@ int main(int argc, char const *argv[])
 			print_ivec(ivec);
 		}
 	}
-	
+
+	// cout<<"------"<<endl;
+	// iivec = mdr_I_repair_qDisk_blocks_id(0);
+	// print_iivec(iivec);
+
+
+	cout<<"------"<<endl;
+	for(int i = 0; i < strip_size; i++){
+		vector<vector<int> > iivec = mdr_I_repair_qDisk_blocks_id(i);
+		print_iivec(iivec);
+	}
+
 
 	delete []matrixB;
 	return 0;

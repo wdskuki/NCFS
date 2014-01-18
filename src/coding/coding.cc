@@ -422,6 +422,22 @@ vector<int> CodingLayer::mdr_I_find_q_blocks_id(int disk_id, int block_no){
 	return ivec;
 }
 
+vector<vector<int> > CodingLayer::mdr_I_repair_qDisk_blocks_id(int block_no){
+	vector<vector<int> > iivec;
+	int row = strip_size;
+	int col = NCFS_DATA->data_disk_num+1;
+	for(int i = 0; i < col; i++){
+		vector<int> ivec;
+		for(int j = 0; j < strip_size; j++){
+			if((mdr_I_encoding_matrixB[block_no*col+i]&(1<<(strip_size-j-1))) != 0){
+				ivec.push_back(j);
+			}
+		}
+		iivec.push_back(ivec);
+	}
+	return iivec;
+}
+
 //Add by Dongsheng Wei on Jan. 17, 2014 end.
 
 
@@ -3182,6 +3198,7 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 	temp_buf = (char *)malloc(sizeof(char) * size);
 	memset(temp_buf, 0, size);
 
+	vector<vector<int> > repair_q_blocks_no;
 	// P_temp = (char *)malloc(sizeof(char) * size);
 	// memset(P_temp, 0, size);
 
@@ -3241,7 +3258,32 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 
 			}else if(disk_id == disk_total_num-1){
 			//fail disk(disk_id) is Q disk
+				int strip_num = block_no / strip_size;
+				int strip_offset = block_no % strip_size;
 
+
+				repair_q_blocks_no = mdr_I_repair_qDisk_blocks_id(strip_offset);
+
+				int iivec_size = repair_q_blocks_no.size();
+				for(i = 0; i < iivec_size; i++){
+					int ivec_size = repair_q_blocks_no[i].size();
+					for(int ii = 0; ii < ivec_size; ii++){
+					
+						if (NCFS_DATA->run_experiment == 1)	gettimeofday(&t1, NULL);
+
+					 	retstat = cacheLayer->DiskRead(i, temp_buf, size, 
+					 		(repair_q_blocks_no[i][ii] + strip_num*strip_size) * block_size);
+					
+						if (NCFS_DATA->run_experiment == 1)	gettimeofday(&t2, NULL);
+						for (j = 0; j < size; ++j) {
+							buf[j] = buf[j] ^ temp_buf[j];
+						}
+						if (NCFS_DATA->run_experiment == 1)	gettimeofday(&t3, NULL);
+
+						duration = (t3.tv_sec - t2.tv_sec) +(t3.tv_usec - t2.tv_usec) / 1000000.0;
+						NCFS_DATA->decoding_time += duration;
+					}
+				}
 			}
 		}else if(disk_failed_no == 2){
 			//TODO:

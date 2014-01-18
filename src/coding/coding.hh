@@ -38,7 +38,7 @@ class CodingLayer {
 	long long* mdr_I_encoding_matrix(int k);
 	void mdr_print_matrix(long long* matrix, int row, int col);	
 	vector<int> mdr_I_find_q_blocks_id(int disk_id, int block_no);
-
+	vector<vector<int> > mdr_I_repair_qDisk_blocks_id(int block_no);
 	//Add by Dongsheng Wei on Jan. 17, 2014 end.	
 	
 	//encoding
