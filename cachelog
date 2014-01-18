@@ -1,60 +1,66 @@
 *****time counters*****
 Encoding time: 0.000000
 Decoding time: 0.000000
-Disk Read time: 0.000045
+Disk Read time: 0.000046
 Disk Write time: 0.000000
 **********
 *****time counters*****
-Encoding time: 0.000158
+Encoding time: 0.000166
 Decoding time: 0.000000
-Disk Read time: 0.000515
-Disk Write time: 0.000703
+Disk Read time: 0.000766
+Disk Write time: 0.001405
 **********
 *****time counters*****
-Encoding time: 0.142876
+Encoding time: 0.000271
 Decoding time: 0.000000
-Disk Read time: 0.735438
-Disk Write time: 0.936985
+Disk Read time: 0.001209
+Disk Write time: 0.001824
 **********
 *****time counters*****
-Encoding time: 0.143085
+Encoding time: 0.000323
 Decoding time: 0.000000
-Disk Read time: 0.737864
-Disk Write time: 0.939508
+Disk Read time: 0.001498
+Disk Write time: 0.002222
 **********
 *****time counters*****
-Encoding time: 0.143140
+Encoding time: 0.000480
 Decoding time: 0.000000
-Disk Read time: 0.740713
-Disk Write time: 0.939684
+Disk Read time: 0.001962
+Disk Write time: 0.003517
 **********
 *****time counters*****
-Encoding time: 0.143140
+Encoding time: 0.000586
 Decoding time: 0.000000
-Disk Read time: 0.740751
-Disk Write time: 0.939704
+Disk Read time: 0.002386
+Disk Write time: 0.003997
 **********
 *****time counters*****
-Encoding time: 0.143351
+Encoding time: 0.000638
 Decoding time: 0.000000
-Disk Read time: 0.742442
-Disk Write time: 0.940624
+Disk Read time: 0.002705
+Disk Write time: 0.004359
 **********
 *****time counters*****
-Encoding time: 0.143407
+Encoding time: 0.000743
 Decoding time: 0.000000
-Disk Read time: 0.762372
-Disk Write time: 0.954534
+Disk Read time: 0.003140
+Disk Write time: 0.005702
 **********
 *****time counters*****
-Encoding time: 0.143407
+Encoding time: 0.142959
 Decoding time: 0.000000
-Disk Read time: 0.762414
-Disk Write time: 0.954554
+Disk Read time: 0.615821
+Disk Write time: 0.595681
 **********
 *****time counters*****
-Encoding time: 0.143512
+Encoding time: 0.143063
 Decoding time: 0.000000
-Disk Read time: 0.762907
-Disk Write time: 0.955185
+Disk Read time: 0.616489
+Disk Write time: 0.596424
+**********
+*****time counters*****
+Encoding time: 0.143219
+Decoding time: 0.000000
+Disk Read time: 0.617098
+Disk Write time: 0.597204
 **********
