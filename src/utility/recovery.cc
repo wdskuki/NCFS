@@ -136,10 +136,10 @@ void RecoveryTool::recover(){
 				(fail_disk_num <= NCFS_DATA->mbr_n - NCFS_DATA->mbr_k)){
 			ConventionalRecover(fail_disk_id);
 		}
-                else if ((coding_type == 3000) &&
-                                (fail_disk_num <= (NCFS_DATA->disk_total_num-NCFS_DATA->data_disk_num))){
-                        ConventionalRecover(fail_disk_id);
-                }
+        else if ((coding_type == 3000) &&
+        		(fail_disk_num <= (NCFS_DATA->disk_total_num-NCFS_DATA->data_disk_num))){
+            ConventionalRecover(fail_disk_id);
+        }
 		else{
 			printf("Too many disks fail.\n");
 		}
