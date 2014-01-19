@@ -3,6 +3,7 @@
 
 #include "../filesystem/filesystem_common.hh"
 #include <vector>
+#include <map>
 using namespace std;
 class CodingLayer {
 
@@ -39,6 +40,23 @@ class CodingLayer {
 	void mdr_print_matrix(long long* matrix, int row, int col);	
 	vector<int> mdr_I_find_q_blocks_id(int disk_id, int block_no);
 	vector<vector<int> > mdr_I_repair_qDisk_blocks_id(int block_no);
+
+	vector<int> mdr_I_repair_dpDisk_stripeIndexs_less_k();
+	vector<int> mdr_I_repair_dpDisk_stripeIndexs_equal_k();
+	vector<int> mdr_I_repair_dpDisk_stripeIndexs_more_k();
+	vector<int> mdr_I_repair_dpDisk_stripeIndexs(int diskID);
+
+	bool mdr_I_one_dpDisk_fail_bool_m;
+	bool mdr_I_one_dpDisk_fail_bool_v;
+	map<int, vector<vector<int> > > mdr_I_one_dpDisk_fail_nonStripeIndex;
+	vector<int> mdr_I_one_dpDisk_fail_stripeIndex;
+	map<int, vector<vector<int> > > mdr_I_repair_dpDisk_nonstripeIndexs_blocks_no(int fail_disk_id, 
+														  vector<int>& stripeIndexs);
+
+	void print_ivec(vector<int>& ivec);
+	void print_iivec(vector<vector<int> >& iivec);
+	void print_ivmap(map<int, vector<vector<int> > >& ivmap, vector<int>& stripeIndexs);
+
 	//Add by Dongsheng Wei on Jan. 17, 2014 end.	
 	
 	//encoding
