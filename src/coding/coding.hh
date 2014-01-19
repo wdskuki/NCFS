@@ -41,11 +41,14 @@ class CodingLayer {
 	vector<int> mdr_I_find_q_blocks_id(int disk_id, int block_no);
 	vector<vector<int> > mdr_I_repair_qDisk_blocks_id(int block_no);
 
-	vector<int> mdr_I_repair_dpDisk_stripeIndexs_less_k();
-	vector<int> mdr_I_repair_dpDisk_stripeIndexs_equal_k();
-	vector<int> mdr_I_repair_dpDisk_stripeIndexs_more_k();
-	vector<int> mdr_I_repair_dpDisk_stripeIndexs(int diskID);
+	// vector<int> mdr_I_repair_dpDisk_stripeIndexs_less_k();
+	// vector<int> mdr_I_repair_dpDisk_stripeIndexs_equal_k();
+	// vector<int> mdr_I_repair_dpDisk_stripeIndexs_more_k();
+	// vector<int> mdr_I_repair_dpDisk_stripeIndexs(int diskID);
 
+	vector<int> mdr_I_repair_dpDisk_stripeIndexs_internal(int diskID, int val_k);
+	vector<int> mdr_I_repair_dpDisk_stripeIndexs(int diskID, int val_k);
+	
 	bool mdr_I_one_dpDisk_fail_bool_m;
 	bool mdr_I_one_dpDisk_fail_bool_v;
 	map<int, vector<vector<int> > > mdr_I_one_dpDisk_fail_nonStripeIndex;

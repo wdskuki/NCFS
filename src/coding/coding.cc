@@ -497,54 +497,113 @@ vector<vector<int> > CodingLayer::mdr_I_repair_qDisk_blocks_id(int block_no){
 	return iivec;
 }
 
-vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs_less_k(){
-	int r = strip_size / 2;
-	vector<int> ivec;
-	for(int i = 0; i < r; i++){
-		ivec.push_back(i*2);
-	}
-	return ivec;
-}
+// vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs_less_k(){
+// 	int r = strip_size / 2;
+// 	vector<int> ivec;
+// 	for(int i = 0; i < r; i++){
+// 		ivec.push_back(i*2);
+// 	}
+// 	return ivec;
+// }
 
-vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs_equal_k(){
-	int r = strip_size / 2;
-	vector<int> ivec;
-	for(int i = 0; i < r; i++){
-		ivec.push_back(i);
-	}
-	return ivec;
-}
+// vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs_equal_k(){
+// 	int r = strip_size / 2;
+// 	vector<int> ivec;
+// 	for(int i = 0; i < r; i++){
+// 		ivec.push_back(i);
+// 	}
+// 	return ivec;
+// }
 
-vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs_more_k(){
-	int r = strip_size / 2;
-	vector<int> ivec;
-	for(int i = 0; i < r; i++){
-		ivec.push_back(i+r);
-	}
-	return ivec;	
-}
+// vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs_more_k(){
+// 	int r = strip_size / 2;
+// 	vector<int> ivec;
+// 	for(int i = 0; i < r; i++){
+// 		ivec.push_back(i+r);
+// 	}
+// 	return ivec;	
+// }
 
-vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs(int diskID){
+// vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs(int diskID){
+// 	vector<int> ivec;
+// 	int k = NCFS_DATA->data_disk_num;
+// 	if(diskID > k){
+// 		//cout<<"error in mdr_I_repair_dqDisk_stripeIndexs()"<<endl;
+// 		printf("error in mdr_I_repair_dpDisk_stripeIndexs()\n");
+// 		return ivec;
+// 	}
+// 	if(k == 1){
+// 		if(diskID == 0)
+// 			return mdr_I_repair_dpDisk_stripeIndexs_equal_k();
+// 		else if(diskID == 1)
+// 			return mdr_I_repair_dpDisk_stripeIndexs_more_k();
+// 	}else if(k > 1){
+// 		if(diskID >=0 && diskID < k - 1)
+// 			return mdr_I_repair_dpDisk_stripeIndexs_less_k();
+// 		else if(diskID == k - 1)
+// 			return mdr_I_repair_dpDisk_stripeIndexs_equal_k();
+// 		else if(diskID == k)
+// 			return mdr_I_repair_dpDisk_stripeIndexs_more_k();
+// 	}	
+// }
+
+
+vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs_internal(int diskID, int val_k){
 	vector<int> ivec;
-	int k = NCFS_DATA->data_disk_num;
-	if(diskID > k){
-		//cout<<"error in mdr_I_repair_dqDisk_stripeIndexs()"<<endl;
-		printf("error in mdr_I_repair_dpDisk_stripeIndexs()\n");
+	if(val_k == 1){
+		if(diskID == 1){
+			ivec.push_back(1);
+			return ivec;
+		}
+		else if(diskID == 2){
+			ivec.push_back(2);
+			return ivec;
+		}else{
+			cout<<"diskID = "<<diskID<<endl;
+			cout<<"val_k = "<<val_k<<endl;
+			printf("error: fail diskID is large than k in mdr_I_repair_dpDisk_stripeIndexs()\n");
+			exit(1);
+		}
+	}
+
+	int val_strip_size = (int)pow(2, val_k);
+	int r = val_strip_size / 2;
+	if(diskID >= 1 && diskID <= val_k-1){ 
+		vector<int> ivec_old = mdr_I_repair_dpDisk_stripeIndexs_internal(diskID, val_k-1);
+		set<int> iset;
+		iset.insert(ivec_old.begin(), ivec_old.end());
+
+		for(int i = 1; i <= val_strip_size; i++){
+			if((iset.find(i) != iset.end()) || (iset.find(i-r) != iset.end())){
+				ivec.push_back(i);
+			}
+		}
 		return ivec;
+	}else if(diskID == val_k){
+		for(int i = 1; i <= r; i++){
+			ivec.push_back(i);
+		}
+		return ivec;
+	}else if(diskID == val_k+1){
+		for(int i = val_k+1; val_k <= val_strip_size; i++){
+			ivec.push_back(i);
+		}
+		return ivec;
+	}else{
+		printf("error: fail diskID is large than k in mdr_I_repair_dpDisk_stripeIndexs()\n");
+		exit(1);
 	}
-	if(k == 1){
-		if(diskID == 0)
-			return mdr_I_repair_dpDisk_stripeIndexs_equal_k();
-		else if(diskID == 1)
-			return mdr_I_repair_dpDisk_stripeIndexs_more_k();
-	}else if(k > 1){
-		if(diskID >=0 && diskID < k - 1)
-			return mdr_I_repair_dpDisk_stripeIndexs_less_k();
-		else if(diskID == k - 1)
-			return mdr_I_repair_dpDisk_stripeIndexs_equal_k();
-		else if(diskID == k)
-			return mdr_I_repair_dpDisk_stripeIndexs_more_k();
-	}	
+}
+
+vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs(int diskID, int val_k){
+	vector<int> ivec = mdr_I_repair_dpDisk_stripeIndexs_internal(diskID+1, val_k);
+	int ivec_size = ivec.size();
+
+	vector<int> ivec2;
+	for(int i = 0; i < ivec_size; i++){
+		ivec2.push_back(ivec[i]-1);
+	}
+	return ivec2;
 }
 
 map<int, vector<vector<int> > > CodingLayer::mdr_I_repair_dpDisk_nonstripeIndexs_blocks_no(int fail_disk_id, 
@@ -3358,7 +3417,7 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 				if(mdr_I_one_dpDisk_fail_bool_v == false){
 					mdr_I_one_dpDisk_fail_bool_v = true;
 					mdr_I_one_dpDisk_fail_stripeIndex = 
-						mdr_I_repair_dpDisk_stripeIndexs(disk_id);
+						mdr_I_repair_dpDisk_stripeIndexs(disk_id, NCFS_DATA->data_disk_num);
 				}
 				
 				// cout<<"mdr_I_one_dpDisk_fail_stripeIndex:\n";
