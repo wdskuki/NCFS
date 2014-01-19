@@ -464,12 +464,19 @@ vector<int> CodingLayer::mdr_I_find_q_blocks_id(int disk_id, int block_no){
 
 	int row = strip_size;
 	int col = NCFS_DATA->data_disk_num + 1;
+	int pDisk_id = NCFS_DATA->data_disk_num; 
 
 	int t = 1 << (strip_size - block_no -1);
 	for(int i = 0; i < row; i++){
+		//data block affect q disk
 		if((mdr_I_encoding_matrixB[i*col+disk_id]&t) != 0){
 			ivec.push_back(i);
 		}
+
+		//parity block (disk_id) affects q disk
+		if((mdr_I_encoding_matrixB[i*col+pDisk_id]&t) != 0){
+			ivec.push_back(i);
+		}		
 	}
 	return ivec;
 }
@@ -3366,6 +3373,10 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 				//if the needed blk is in the stripeIndexs
 				if(stripeIndexs_set.find(strip_offset) 
 					!= stripeIndexs_set.end()){
+
+					// //DEBUG
+					// cout<<"strip_offset = "<<strip_offset<<endl;
+
 					for(int i = 0; i < disk_total_num-1; i++){
 						if(i != disk_id){
 							retstat = cacheLayer->DiskRead(i, temp_buf, size, offset);

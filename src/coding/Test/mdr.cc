@@ -101,7 +101,7 @@ long long* mdr_I_encoding_matrix(int k){
 	return mdr_encoding_matrix_B;
 }
 
-vector<int> mdr_I_find_parity_blocks_id(int disk_id, int block_no){
+vector<int> mdr_I_find_q_blocks_id(int disk_id, int block_no){
 	int strip_size = (int)pow(2, k);
 	vector<int> ivec;
 
@@ -109,11 +109,20 @@ vector<int> mdr_I_find_parity_blocks_id(int disk_id, int block_no){
 	int col = k+1;
 
 	int t = 1 << (strip_size - block_no -1);
+
+	
 	for(int i = 0; i < row; i++){
+		//data block affect q disk
 		if((matrixB[i*col+disk_id]&t) != 0){
 			ivec.push_back(i);
 		}
+		
+		//parity block (disk_id) affects q disk
+		if((matrixB[i*col+k]&t) != 0){
+			ivec.push_back(i);
+		}
 	}
+
 	return ivec;
 }
 
@@ -297,7 +306,7 @@ int main(int argc, char const *argv[])
 	cout<<"------"<<endl;
 	for(int i = 0; i < k; i++){
 		for(int j = 0; j < strip_size; j++){
-			ivec = mdr_I_find_parity_blocks_id(i,j);
+			ivec = mdr_I_find_q_blocks_id(i,j);
 			printf("[%d, %d]: ", i, j);
 			print_ivec(ivec);
 		}
