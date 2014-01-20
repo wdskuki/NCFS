@@ -112,6 +112,103 @@ int ConventionalRecover(int fail_disk_id){
 	    
 }
 
+//Add by Dongsheng Wei on Jan. 20, 2014 begin.
+int mdr_I_recover(int fail_disk_id){
+	  	
+	  	printf("debug: mdr_I_recover()\n");
+
+
+	    NCFS_DATA->process_state = 1;
+	    int __recoversize = NCFS_DATA->disk_size[fail_disk_id];
+
+	    int strip_size = fileSystemLayer->codingLayer->mdr_I_get_strip_size();
+	    int disk_total_num = NCFS_DATA->disk_total_num;
+	    int block_size = NCFS_DATA->chunk_size;
+
+	    struct timeval starttime, endtime;
+	    double duration;
+	    double data_size;
+
+	    gettimeofday(&starttime,NULL);
+	    NCFS_DATA->dev_name[fail_disk_id] = (char*)realloc(NCFS_DATA->dev_name[fail_disk_id],strlen(_newdevice));
+
+	    memset(NCFS_DATA->dev_name[fail_disk_id],0,strlen(_newdevice)+1);
+	    strncpy(NCFS_DATA->dev_name[fail_disk_id],_newdevice,strlen(_newdevice));
+	    cacheLayer->DiskCacheName(fail_disk_id,_newdevice);
+
+	    //storageLayer->disk_fd[fail_disk_id] = open(NCFS_DATA->dev_name[fail_disk_id],O_RDWR);
+	    //storageLayer->DiskRenew(fail_disk_id);
+
+	   	char*** pread_stripes;
+	   	int r = strip_size / 2;
+	    pread_stripes = (char ***)malloc(sizeof(char** ) * r);
+	    for(int i = 0; i < r; i++){
+	    	pread_stripes[i] = (char **)malloc(sizeof(char* )* disk_total_num);
+	    	for(int j = 0; j < disk_total_num; j++){
+	    		pread_stripes[i][j] = (char *)malloc(sizeof(char)* block_size);
+	    		memset(pread_stripes[i][j], 0, block_size);
+	    	}
+	    }
+
+	    bool** isInbuf;
+	    isInbuf = (bool **)malloc(sizeof(bool**)*r);
+	    for(int i = 0; i < r; i++){
+	    	isInbuf[i] = (bool *)malloc(sizeof(bool*)*disk_total_num);
+	    	for(int j = 0; j < disk_total_num; j++){
+	    		isInbuf[i][j] = false;
+	    	}
+	    }
+		
+	    for(int i = 0; i < __recoversize; i -= strip_size){
+
+	    	// printf("i = %d\n", i);
+
+		    // int block_size = NCFS_DATA->chunk_size;
+		    // int offset = i * block_size;
+		    // //(bug@@)char *buf = (char*)calloc(block_size,0);
+		    // char buf[block_size];
+		    // int retstat = fileSystemLayer->codingLayer->decode(fail_disk_id,buf,block_size,offset);
+
+		    // retstat = cacheLayer->DiskWrite(fail_disk_id,buf,block_size,offset);
+
+
+
+	    }
+	    
+	    for(int i = 0; i < r; i++){
+	    	for(int j = 0; j < disk_total_num; j++){
+	    		free(pread_stripes[i][j]);
+	    	}
+	    	free(pread_stripes[i]);
+	    }
+	    free(pread_stripes);	    
+
+	    for(int i = 0; i < r; i++){
+	    	free(isInbuf[i]);
+	    }
+	    free(isInbuf);
+
+
+	    //NCFS_DATA->disk_status[fail_disk_id] = 0;
+	    fileSystemLayer->set_device_status(fail_disk_id,0);
+
+	    gettimeofday(&endtime,NULL);
+
+	    fprintf(stderr,"\n\n\nRecovery on disk %d, new device %s Done.\n\n\n",fail_disk_id,_newdevice);
+
+	    duration = endtime.tv_sec - starttime.tv_sec + (endtime.tv_usec-starttime.tv_usec)/1000000.0;
+	    data_size  = __recoversize * (NCFS_DATA->chunk_size) / (1024 * 1024);
+	    
+	    printf("Elapsed Time = %fs\n", duration);
+	    printf("Repair Throughput = %f MB/s\n", (float)(data_size / duration));
+	    printf("Storage Node Size = %f MB\n", (float)data_size);
+	    printf("Block Size = %d B\n", NCFS_DATA->chunk_size);
+			
+	    NCFS_DATA->process_state = 0;
+	    return 0;
+	    
+}
+//Add by Dongsheng Wei on Jan. 20, 2014 end.
 
 void RecoveryTool::recover(){
 	int coding_type = NCFS_DATA->disk_raid_type;
@@ -130,7 +227,14 @@ void RecoveryTool::recover(){
 	
 	if (fail_disk_num > 0){
 		if (fail_disk_num == 1){
-			ConventionalRecover(fail_disk_id);
+			//Add by Dongsheng Wei on Jan. 20, 2014 begin.
+			if(coding_type == 5000){
+				mdr_I_recover(fail_disk_id);
+			}
+			//Add by Dongsheng Wei on Jan. 20, 2014 end.
+			else{
+				ConventionalRecover(fail_disk_id);
+			}
 		}
 		else if ((fail_disk_num == 2) && (coding_type == 6)){
 			ConventionalRecover(fail_disk_id);

@@ -497,56 +497,6 @@ vector<vector<int> > CodingLayer::mdr_I_repair_qDisk_blocks_id(int block_no){
 	return iivec;
 }
 
-// vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs_less_k(){
-// 	int r = strip_size / 2;
-// 	vector<int> ivec;
-// 	for(int i = 0; i < r; i++){
-// 		ivec.push_back(i*2);
-// 	}
-// 	return ivec;
-// }
-
-// vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs_equal_k(){
-// 	int r = strip_size / 2;
-// 	vector<int> ivec;
-// 	for(int i = 0; i < r; i++){
-// 		ivec.push_back(i);
-// 	}
-// 	return ivec;
-// }
-
-// vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs_more_k(){
-// 	int r = strip_size / 2;
-// 	vector<int> ivec;
-// 	for(int i = 0; i < r; i++){
-// 		ivec.push_back(i+r);
-// 	}
-// 	return ivec;	
-// }
-
-// vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs(int diskID){
-// 	vector<int> ivec;
-// 	int k = NCFS_DATA->data_disk_num;
-// 	if(diskID > k){
-// 		//cout<<"error in mdr_I_repair_dqDisk_stripeIndexs()"<<endl;
-// 		printf("error in mdr_I_repair_dpDisk_stripeIndexs()\n");
-// 		return ivec;
-// 	}
-// 	if(k == 1){
-// 		if(diskID == 0)
-// 			return mdr_I_repair_dpDisk_stripeIndexs_equal_k();
-// 		else if(diskID == 1)
-// 			return mdr_I_repair_dpDisk_stripeIndexs_more_k();
-// 	}else if(k > 1){
-// 		if(diskID >=0 && diskID < k - 1)
-// 			return mdr_I_repair_dpDisk_stripeIndexs_less_k();
-// 		else if(diskID == k - 1)
-// 			return mdr_I_repair_dpDisk_stripeIndexs_equal_k();
-// 		else if(diskID == k)
-// 			return mdr_I_repair_dpDisk_stripeIndexs_more_k();
-// 	}	
-// }
-
 
 vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs_internal(int diskID, int val_k){
 	vector<int> ivec;
@@ -606,6 +556,18 @@ vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs(int diskID, int val_k)
 	return ivec2;
 }
 
+bool CodingLayer::mdr_I_repair_if_blk_in_buf(int disk_id, int stripe_blk_offset, bool** isInbuf,
+									 vector<int>& stripeIndexs){
+	int vec_size = stripeIndexs.size();
+	for(int i = 0; i < vec_size; i++){
+		if((disk_id == stripeIndexs[i]) && (isInbuf[i][stripe_blk_offset] == true)){
+			return true;
+		}
+	}
+	return false;
+}
+
+
 map<int, vector<vector<int> > > CodingLayer::mdr_I_repair_dpDisk_nonstripeIndexs_blocks_no(int fail_disk_id, 
 														  vector<int>& stripeIndexs){
 
@@ -652,9 +614,6 @@ map<int, vector<vector<int> > > CodingLayer::mdr_I_repair_dpDisk_nonstripeIndexs
 
 		ivmap[fail_disk_block_no] = iivec;
 	}
-	// cout<<"mdr_I_repair_dpDisk_nonstripeIndexs_blocks_no()\n";
-	// print_ivmap(ivmap, stripeIndexs);
-
 	return ivmap;	
 }
 
@@ -3433,8 +3392,223 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 				if(stripeIndexs_set.find(strip_offset) 
 					!= stripeIndexs_set.end()){
 
-					// //DEBUG
-					// cout<<"strip_offset = "<<strip_offset<<endl;
+					for(int i = 0; i < disk_total_num-1; i++){
+						if(i != disk_id){
+							retstat = cacheLayer->DiskRead(i, temp_buf, size, offset);
+							for(long long j = 0; j < size; j++){
+								buf[j] = buf[j] ^ temp_buf[j];
+							}
+						}
+					}
+				}
+				else{// if the neede blk is not in the stripeIndexs
+					if(mdr_I_one_dpDisk_fail_bool_m == false){
+						mdr_I_one_dpDisk_fail_bool_m = true;
+
+						mdr_I_one_dpDisk_fail_nonStripeIndex = 
+								mdr_I_repair_dpDisk_nonstripeIndexs_blocks_no(disk_id, 
+							 							mdr_I_one_dpDisk_fail_stripeIndex);
+					}					
+
+					// cout<<"mdr_I_one_dpDisk_fail_nonStripeIndex\n";
+					// print_ivmap(mdr_I_one_dpDisk_fail_nonStripeIndex, mdr_I_one_dpDisk_fail_stripeIndex);
+
+					vector<vector<int> > iivec = mdr_I_one_dpDisk_fail_nonStripeIndex[strip_offset];
+
+					//cout<<"iivec:\n";
+					//print_iivec(iivec);
+					int iivec_size = iivec.size();
+					//cout<<"iivec_size = "<<iivec_size<<endl;
+
+					if(iivec_size != NCFS_DATA->disk_total_num){
+						printf("error: repair reading blks num\n");
+						exit(1);
+					}
+
+					int debug_count = 0;
+
+					for(int i = 0; i < iivec_size; i++){
+						if(!iivec[i].empty()){	
+							//the needed blk should be repaired firstly
+							if(i == disk_id){
+								int ivec_size = iivec[i].size();
+								for(int i2 = 0; i2 < ivec_size; i2++){
+									int i2_blk_num = iivec[i][i2]+strip_num*strip_size;
+
+									for(int ii = 0; ii < disk_total_num-1; ii++){
+										if(ii != i){
+											//printf("debug_count = %d, [disk_id, block_no] = [%d, %d]\n", ++debug_count, ii, i2_blk_num);
+											retstat = cacheLayer->DiskRead(ii, temp_buf, size, i2_blk_num*block_size);
+											for(long long j = 0; j < size; j++){
+												buf[j] = buf[j] ^ temp_buf[j];
+											}
+										}
+									}
+								}
+							}
+					
+							//all the needed blks can be read directly
+							if(i != disk_id){
+								int ivec_size = iivec[i].size();
+								for(int ii = 0; ii < ivec_size; ii++){
+									int blk_num = iivec[i][ii]+strip_num * strip_size;
+
+									//printf("debug_count = %d, [disk_id, block_no] = [%d, %d]\n", ++debug_count, i, blk_num);
+		
+									retstat = cacheLayer->DiskRead(i, temp_buf, size, blk_num * block_size);
+
+									for(long long j = 0; j < size; j++){
+										buf[j] = buf[j] ^ temp_buf[j];
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			else if(disk_id = disk_total_num - 1){
+				//fail disk(disk_id) is Q disk
+				//TODO:	
+			}
+		}
+		else{
+			printf("MDR_I number of failed disks is larger than 1.\n");
+			return -1;
+		}
+
+		free(temp_buf);
+		return size;
+
+	}
+	AbnormalError();
+	return -1;
+}
+
+
+int CodingLayer::decoding_mdr_I_recover(int disk_id, char *buf, long long size,
+				long long offset, char*** pread_stripes, bool** isInbuf)
+{
+	int retstat;
+	char *temp_buf;
+
+	int disk_failed_no;
+	int disk_another_failed_id;	//id of second failed disk
+
+	int q_disk_id, p_disk_id;
+	int block_size;
+	long long block_no;
+	int disk_total_num;
+	int data_disk_coeff;
+	char temp_char;
+
+	int g1, g2, g12;
+	char *P_temp;
+	char *Q_temp;
+
+	struct timeval t1, t2, t3;
+	double duration;
+
+	memset(buf, 0, size);
+
+	temp_buf = (char *)malloc(sizeof(char) * size);
+	memset(temp_buf, 0, size);
+
+	vector<vector<int> > repair_q_blocks_no;
+
+	disk_total_num = NCFS_DATA->disk_total_num;
+	block_size = NCFS_DATA->chunk_size;
+	block_no = offset / block_size;
+
+	q_disk_id = disk_total_num - 1;
+	p_disk_id = disk_total_num - 2;
+
+	if (NCFS_DATA->disk_status[disk_id] == 0) {
+
+		retstat = cacheLayer->DiskRead(disk_id, buf, size, offset);
+		return retstat;
+	}
+	else{
+		//check the number of failed disks
+		disk_failed_no = 0;
+		for (int i = 0; i < disk_total_num; i++) {
+			if (NCFS_DATA->disk_status[i] == 1) {
+				(disk_failed_no)++;
+				if (i != disk_id) {
+					disk_another_failed_id = i;
+				}
+			}
+		}
+
+		int strip_num = block_no / strip_size;
+		int strip_offset = block_no % strip_size;
+		
+
+		if(disk_failed_no == 1){ //fail disk id = disk_id
+			if((disk_id >= 0) && (disk_id < disk_total_num-1)){
+				//fail disk(disk_id) is data disk or P disk	
+
+				//find the stripe indexs which is must be read
+				if(mdr_I_one_dpDisk_fail_bool_v == false){
+					mdr_I_one_dpDisk_fail_bool_v = true;
+					mdr_I_one_dpDisk_fail_stripeIndex = 
+						mdr_I_repair_dpDisk_stripeIndexs(disk_id, NCFS_DATA->data_disk_num);
+				}
+
+				//find the block indexs which must be repaired by the stripes in the buf
+				if(mdr_I_one_dpDisk_fail_bool_m == false){
+					mdr_I_one_dpDisk_fail_bool_m = true;
+
+					mdr_I_one_dpDisk_fail_nonStripeIndex = 
+							mdr_I_repair_dpDisk_nonstripeIndexs_blocks_no(disk_id, 
+						 							mdr_I_one_dpDisk_fail_stripeIndex);
+				}				
+
+				//read the essencial stripes into the pread_stripes
+				int s_size = mdr_I_one_dpDisk_fail_stripeIndex.size();
+				for(int i = 0; i < s_size; i++){
+					int blk_num = strip_num*strip_size + mdr_I_one_dpDisk_fail_stripeIndex[i];
+					for(int j = 0; j < disk_total_num; j++){
+						if(j != disk_id){
+							retstat = cacheLayer->DiskRead(j, pread_stripes[i][j], block_size, blk_num*block_size);
+						}
+					}
+				}
+
+				//repair the blk in the buf strips
+				for(int i = 0; i < s_size; i++){
+					for(int j = 0; j < disk_total_num; j++){
+						if(j != disk_id){
+							for(long long j2 = 0; j2 < block_size; j2++){
+								pread_stripes[i][disk_id][j2] ^= pread_stripes[i][j][j2];
+							}
+						}
+					}
+					int buf_offset = mdr_I_one_dpDisk_fail_stripeIndex[i];
+					strncpy(buf+buf_offset*block_size, pread_stripes[i][disk_id], block_size);
+				}
+
+				//repair other blks in the failed disk
+				
+
+
+
+
+
+				/////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+				set<int> stripeIndexs_set;
+				stripeIndexs_set.insert(
+					mdr_I_one_dpDisk_fail_stripeIndex.begin(), 
+					mdr_I_one_dpDisk_fail_stripeIndex.end()
+					);
+
+				//if the needed blk is in the stripeIndexs
+				if(stripeIndexs_set.find(strip_offset) 
+					!= stripeIndexs_set.end()){
 
 					for(int i = 0; i < disk_total_num-1; i++){
 						if(i != disk_id){
@@ -3459,10 +3633,8 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 
 					vector<vector<int> > iivec = mdr_I_one_dpDisk_fail_nonStripeIndex[strip_offset];
 
-					cout<<"iivec:\n";
-					print_iivec(iivec);
-
-					
+					//cout<<"iivec:\n";
+					//print_iivec(iivec);
 					int iivec_size = iivec.size();
 					//cout<<"iivec_size = "<<iivec_size<<endl;
 
@@ -3477,38 +3649,29 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 						if(!iivec[i].empty()){	
 							//the needed blk should be repaired firstly
 							if(i == disk_id){
-
-						//		cout<<"block_no = "<<block_no<<endl; 
-								
-						//		cout<<"ii = ";
 								int ivec_size = iivec[i].size();
 								for(int i2 = 0; i2 < ivec_size; i2++){
 									int i2_blk_num = iivec[i][i2]+strip_num*strip_size;
 
 									for(int ii = 0; ii < disk_total_num-1; ii++){
 										if(ii != i){
-							//			cout<<ii<<" ";
-											printf("debug_count = %d, [disk_id, block_no] = [%d, %d]\n", ++debug_count, ii, i2_blk_num);
+											//printf("debug_count = %d, [disk_id, block_no] = [%d, %d]\n", ++debug_count, ii, i2_blk_num);
 											retstat = cacheLayer->DiskRead(ii, temp_buf, size, i2_blk_num*block_size);
 											for(long long j = 0; j < size; j++){
 												buf[j] = buf[j] ^ temp_buf[j];
 											}
 										}
 									}
-						//		cout<<"\n";
 								}
 							}
 					
 							//all the needed blks can be read directly
-
-						//	cout<<"blk_num = ";
 							if(i != disk_id){
 								int ivec_size = iivec[i].size();
 								for(int ii = 0; ii < ivec_size; ii++){
 									int blk_num = iivec[i][ii]+strip_num * strip_size;
 
-							//		cout<<blk_num<<" ";
-									printf("debug_count = %d, [disk_id, block_no] = [%d, %d]\n", ++debug_count, i, blk_num);
+									//printf("debug_count = %d, [disk_id, block_no] = [%d, %d]\n", ++debug_count, i, blk_num);
 		
 									retstat = cacheLayer->DiskRead(i, temp_buf, size, blk_num * block_size);
 
@@ -3516,10 +3679,7 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 										buf[j] = buf[j] ^ temp_buf[j];
 									}
 								}
-							//	cout<<"\n\n";
-							//	cout<<"\n";
 							}
-
 						}
 					}
 				}
@@ -3541,6 +3701,7 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 	AbnormalError();
 	return -1;
 }
+
 
 int CodingLayer::decoding_raid5_noRotate(int disk_id, char *buf, long long size,
 				long long offset)

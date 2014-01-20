@@ -40,15 +40,11 @@ class CodingLayer {
 	void mdr_print_matrix(long long* matrix, int row, int col);	
 	vector<int> mdr_I_find_q_blocks_id(int disk_id, int block_no);
 	vector<vector<int> > mdr_I_repair_qDisk_blocks_id(int block_no);
-
-	// vector<int> mdr_I_repair_dpDisk_stripeIndexs_less_k();
-	// vector<int> mdr_I_repair_dpDisk_stripeIndexs_equal_k();
-	// vector<int> mdr_I_repair_dpDisk_stripeIndexs_more_k();
-	// vector<int> mdr_I_repair_dpDisk_stripeIndexs(int diskID);
-
 	vector<int> mdr_I_repair_dpDisk_stripeIndexs_internal(int diskID, int val_k);
 	vector<int> mdr_I_repair_dpDisk_stripeIndexs(int diskID, int val_k);
-	
+	bool mdr_I_repair_if_blk_in_buf(int disk_id, int stripe_blk_offset, bool ** isInbuf,
+									 vector<int>& mdr_I_one_dpDisk_fail_stripeIndex);
+
 	bool mdr_I_one_dpDisk_fail_bool_m;
 	bool mdr_I_one_dpDisk_fail_bool_v;
 	map<int, vector<vector<int> > > mdr_I_one_dpDisk_fail_nonStripeIndex;
@@ -59,7 +55,6 @@ class CodingLayer {
 	void print_ivec(vector<int>& ivec);
 	void print_iivec(vector<vector<int> >& iivec);
 	void print_ivmap(map<int, vector<vector<int> > >& ivmap, vector<int>& stripeIndexs);
-
 	//Add by Dongsheng Wei on Jan. 17, 2014 end.	
 	
 	//encoding
@@ -100,6 +95,9 @@ class CodingLayer {
 	//Add by Dongsheng Wei on Jan. 16, 2014 begin.
 	int decoding_mdr_I(int disk_id, char *buf, long long size,
 				long long offset);
+	int decoding_mdr_I_recover(int disk_id, char *buf, long long size,
+				long long offset, char*** pread_stripes, bool** isInbuf);
+	
 	int decoding_raid5_noRotate(int disk_id, char *buf, long long size,
 				long long offset);
 	int decoding_raid6_noRotate(int disk_id, char *buf, long long size,
@@ -111,6 +109,7 @@ class CodingLayer {
 	 ~CodingLayer();
 	struct data_block_info encode(const char *buf, int size);
 	int decode(int disk_id, char *buf, long long size, long long offset);
+	int mdr_I_get_strip_size(){return strip_size;}
 };
 
 #endif

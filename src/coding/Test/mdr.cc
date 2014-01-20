@@ -250,7 +250,16 @@ vector<int> mdr_I_repair_dpDisk_stripeIndexs(int diskID, int val_k){
 	return ivec2;
 }
 
-
+bool mdr_I_repair_if_blk_in_buf(int disk_id, int stripe_blk_offset, bool** isInbuf,
+									 vector<int>& stripeIndexs){
+	int vec_size = stripeIndexs.size();
+	for(int i = 0; i < vec_size; i++){
+		if((disk_id == stripeIndexs[i]) && (isInbuf[i][stripe_blk_offset] == true)){
+			return true;
+		}
+	}
+	return false;
+}
 
 map<int, vector<vector<int> > > mdr_I_repair_dpDisk_nonstripeIndexs_blocks_no(int fail_disk_id, 
 														  vector<int>& stripeIndexs){
@@ -348,6 +357,33 @@ void print_ivmap(map<int, vector<vector<int> > >& ivmap, vector<int>& stripeInde
 	}
 }
 
+void print_bool(bool** bufIndex, int row, int col){
+	for(int i = 0; i < row; i++){
+		for(int j = 0; j < col; j++){
+			cout<<bufIndex[i][j]<<" ";
+		}
+		cout<<endl;
+	}
+}
+
+void random_bufIndex(bool** bufIndex, int row, int col){
+	srand( (unsigned)time( NULL ) ); 
+	for(int i = 0; i < row; i++){
+		for(int j = 0; j < col; j++){
+			int t = rand()%2;
+			if(t == 1) bufIndex[i][j] = true;
+			else bufIndex[i][j] = false;
+		}
+	}
+}
+void false_bufIndex(bool** bufIndex, int row, int col){
+	for(int i = 0; i < row; i++){
+		for(int j = 0; j < col; j++){
+			bufIndex[i][j] = false;
+		}
+	}
+}
+
 int main(int argc, char const *argv[])
 {
 	vector<int> ivec;
@@ -390,7 +426,35 @@ int main(int argc, char const *argv[])
 	// 	print_ivec(ivec);
 	// }
 
-	
+	cout<<"------"<<endl;
+	bool **bufIndex;
+	int r = strip_size / 2;
+	bufIndex = (bool **)malloc(sizeof(bool** )*r);
+	for(int i = 0; i < r; i++){
+		bufIndex[i] = (bool *)malloc(sizeof(bool* )*(k+2));
+	}
+
+	random_bufIndex(bufIndex, r, k+2);
+	//false_bufIndex(bufIndex, r, k+2);
+	cout<<"stripIndexs\n";
+	print_ivec(ivec);
+
+	cout<<"original bufIndex:"<<endl;
+	print_bool(bufIndex, r, k+2);
+
+	cout<<"test:\n";
+
+	for(int i = 0; i < strip_size; i++){
+		for(int j = 0; j < k+2; j++){
+			cout<<mdr_I_repair_if_blk_in_buf(i, j, bufIndex, ivec)<<" ";
+		}
+		cout<<endl;
+	}
+	for(int i = 0; i < r; i++)
+		free(bufIndex[i]);
+	free(bufIndex);
+
+
 	delete []matrixB;
 	return 0;
 }
