@@ -3474,26 +3474,42 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 						if(!iivec[i].empty()){	
 							//the needed blk should be repaired firstly
 							if(i == disk_id){
+
+						//		cout<<"block_no = "<<block_no<<endl; 
+								
+						//		cout<<"ii = ";
 								for(int ii = 0; ii < disk_total_num-1; ii++){
 									if(ii != i){
+						//			cout<<ii<<" ";
 										retstat = cacheLayer->DiskRead(ii, temp_buf, size, offset);
 										for(long long j = 0; j < size; j++){
 											buf[j] = buf[j] ^ temp_buf[j];
 										}
 									}
 								}
+						//		cout<<"\n";
 							}
 					
 							//all the needed blks can be read directly
-							int ivec_size = iivec[i].size();
-							for(int ii = 0; ii < ivec_size; ii++){
-								int blk_num = iivec[i][ii]+strip_num * strip_size;
-								retstat = cacheLayer->DiskRead(i, temp_buf, size, blk_num * block_size);
 
-								for(long long j = 0; j < size; j++){
-									buf[j] = buf[j] ^ temp_buf[j];
+						//	cout<<"blk_num = ";
+							if(i != disk_id){
+								int ivec_size = iivec[i].size();
+								for(int ii = 0; ii < ivec_size; ii++){
+									int blk_num = iivec[i][ii]+strip_num * strip_size;
+
+							//		cout<<blk_num<<" ";
+									//printf("[disk_id, block_no] = [%d, %d]\n", i, blk_num);
+								//	retstat = cacheLayer->DiskRead(i, temp_buf, size, blk_num * block_size);
+
+									for(long long j = 0; j < size; j++){
+										buf[j] = buf[j] ^ temp_buf[j];
+									}
 								}
+							//	cout<<"\n\n";
+								cout<<"\n";
 							}
+
 						}
 					}
 				}

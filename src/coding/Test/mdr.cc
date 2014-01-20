@@ -358,7 +358,7 @@ int main(int argc, char const *argv[])
 	strip_size = (int)pow(2, k);
 
 	matrixB = mdr_I_encoding_matrix(k);
-	int fail_disk_id = 2;
+	int fail_disk_id = 0;
 
 	int row = (int)pow(2, k);
 	int col = k+1;

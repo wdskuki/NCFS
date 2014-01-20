@@ -79,6 +79,9 @@ int ConventionalRecover(int fail_disk_id){
 	    //storageLayer->DiskRenew(fail_disk_id);
 
 	    for(int i = 0; i < __recoversize; ++i){
+
+	    	printf("i = %d\n", i);
+
 		    int block_size = NCFS_DATA->chunk_size;
 		    int offset = i * block_size;
 		    //(bug@@)char *buf = (char*)calloc(block_size,0);
