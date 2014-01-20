@@ -3470,6 +3470,9 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 						printf("error: repair reading blks num\n");
 						exit(1);
 					}
+
+					int debug_count = 0;
+
 					for(int i = 0; i < iivec_size; i++){
 						if(!iivec[i].empty()){	
 							//the needed blk should be repaired firstly
@@ -3478,16 +3481,22 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 						//		cout<<"block_no = "<<block_no<<endl; 
 								
 						//		cout<<"ii = ";
-								for(int ii = 0; ii < disk_total_num-1; ii++){
-									if(ii != i){
-						//			cout<<ii<<" ";
-										retstat = cacheLayer->DiskRead(ii, temp_buf, size, offset);
-										for(long long j = 0; j < size; j++){
-											buf[j] = buf[j] ^ temp_buf[j];
+								int ivec_size = iivec[i].size();
+								for(int i2 = 0; i2 < ivec_size; i2++){
+									int i2_blk_num = iivec[i][i2]+strip_num*strip_size;
+
+									for(int ii = 0; ii < disk_total_num-1; ii++){
+										if(ii != i){
+							//			cout<<ii<<" ";
+											printf("debug_count = %d, [disk_id, block_no] = [%d, %d]\n", ++debug_count, ii, i2_blk_num);
+											retstat = cacheLayer->DiskRead(ii, temp_buf, size, i2_blk_num*block_size);
+											for(long long j = 0; j < size; j++){
+												buf[j] = buf[j] ^ temp_buf[j];
+											}
 										}
 									}
-								}
 						//		cout<<"\n";
+								}
 							}
 					
 							//all the needed blks can be read directly
@@ -3499,15 +3508,16 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 									int blk_num = iivec[i][ii]+strip_num * strip_size;
 
 							//		cout<<blk_num<<" ";
-									//printf("[disk_id, block_no] = [%d, %d]\n", i, blk_num);
-								//	retstat = cacheLayer->DiskRead(i, temp_buf, size, blk_num * block_size);
+									printf("debug_count = %d, [disk_id, block_no] = [%d, %d]\n", ++debug_count, i, blk_num);
+		
+									retstat = cacheLayer->DiskRead(i, temp_buf, size, blk_num * block_size);
 
 									for(long long j = 0; j < size; j++){
 										buf[j] = buf[j] ^ temp_buf[j];
 									}
 								}
 							//	cout<<"\n\n";
-								cout<<"\n";
+							//	cout<<"\n";
 							}
 
 						}
