@@ -230,7 +230,7 @@ vector<int> mdr_I_repair_dpDisk_stripeIndexs_internal(int diskID, int val_k){
 		}
 		return ivec;
 	}else if(diskID == val_k+1){
-		for(int i = val_k+1; val_k <= val_strip_size; i++){
+		for(int i = r+1; i <= val_strip_size; i++){
 			ivec.push_back(i);
 		}
 		return ivec;
@@ -358,7 +358,7 @@ int main(int argc, char const *argv[])
 	strip_size = (int)pow(2, k);
 
 	matrixB = mdr_I_encoding_matrix(k);
-	int fail_disk_id = 0;
+	int fail_disk_id = 2;
 
 	int row = (int)pow(2, k);
 	int col = k+1;

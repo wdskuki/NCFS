@@ -585,7 +585,7 @@ vector<int> CodingLayer::mdr_I_repair_dpDisk_stripeIndexs_internal(int diskID, i
 		}
 		return ivec;
 	}else if(diskID == val_k+1){
-		for(int i = val_k+1; val_k <= val_strip_size; i++){
+		for(int i = r+1; i <= val_strip_size; i++){
 			ivec.push_back(i);
 		}
 		return ivec;

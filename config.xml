@@ -7,8 +7,8 @@
 			<Experiment>1</Experiment>
 		</Setting>
 		<Disk>
-			<TotalDiskNumber>5</TotalDiskNumber>
-			<DataDiskNumber>3</DataDiskNumber>
+			<TotalDiskNumber>6</TotalDiskNumber>
+			<DataDiskNumber>4</DataDiskNumber>
 			<ChunkSize>8192</ChunkSize>
 			<RaidType>5000</RaidType>
 			<DiskSetting>
@@ -42,6 +42,12 @@
 					<FreeOffset>0</FreeOffset>
 					<FreeSize>15728640</FreeSize>
 				</Disk5>
+				<Disk6>
+					<DevName>/dev/loop6</DevName>
+					<TotalSize>15728640</TotalSize>
+					<FreeOffset>0</FreeOffset>
+					<FreeSize>15728640</FreeSize>
+				</Disk6>
 			</DiskSetting>
 		</Disk>
 	</FileSystem>
