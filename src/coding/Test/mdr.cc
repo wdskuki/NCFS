@@ -254,13 +254,24 @@ bool mdr_I_repair_if_blk_in_buf(int disk_id, int stripe_blk_offset, bool** isInb
 									 vector<int>& stripeIndexs){
 	int vec_size = stripeIndexs.size();
 	for(int i = 0; i < vec_size; i++){
-		if((disk_id == stripeIndexs[i]) && (isInbuf[i][stripe_blk_offset] == true)){
+		if((stripe_blk_offset == stripeIndexs[i]) && (isInbuf[i][disk_id] == true)){
 			return true;
 		}
 	}
 	return false;
 }
 
+int mdr_I_repair_chg_blkIndexOffset_in_buf(int disk_id, int stripe_blk_offset, vector<int>& stripeIndexs){
+
+	int vec_size = stripeIndexs.size();
+	int count = 0;
+	for(int i = 0; i < vec_size; i++){
+		if(stripe_blk_offset == stripeIndexs[i])
+			return count;
+		count++;
+	}
+	return -1;
+}
 map<int, vector<vector<int> > > mdr_I_repair_dpDisk_nonstripeIndexs_blocks_no(int fail_disk_id, 
 														  vector<int>& stripeIndexs){
 
@@ -394,7 +405,7 @@ int main(int argc, char const *argv[])
 	strip_size = (int)pow(2, k);
 
 	matrixB = mdr_I_encoding_matrix(k);
-	int fail_disk_id = 2;
+	int fail_disk_id = 0;
 
 	int row = (int)pow(2, k);
 	int col = k+1;
@@ -446,7 +457,7 @@ int main(int argc, char const *argv[])
 
 	for(int i = 0; i < strip_size; i++){
 		for(int j = 0; j < k+2; j++){
-			cout<<mdr_I_repair_if_blk_in_buf(i, j, bufIndex, ivec)<<" ";
+			cout<<mdr_I_repair_if_blk_in_buf(j, i, bufIndex, ivec)<<" ";
 		}
 		cout<<endl;
 	}
@@ -454,6 +465,14 @@ int main(int argc, char const *argv[])
 		free(bufIndex[i]);
 	free(bufIndex);
 
+	cout<<"--------------"<<endl;
+	cout<<"blk_offset in buf:\n";
+	for(int i = 0; i < strip_size; i++){
+		for(int j = 0; j < k+2; j++){
+			cout<<mdr_I_repair_chg_blkIndexOffset_in_buf(j, i, ivec)<<" ";
+		}
+		cout<<endl;
+	}	
 
 	delete []matrixB;
 	return 0;

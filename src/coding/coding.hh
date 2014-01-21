@@ -45,6 +45,7 @@ class CodingLayer {
 	bool mdr_I_repair_if_blk_in_buf(int disk_id, int stripe_blk_offset, bool ** isInbuf,
 									 vector<int>& mdr_I_one_dpDisk_fail_stripeIndex);
 
+	int mdr_I_repair_chg_blkIndexOffset_in_buf(int disk_id, int stripe_blk_offset, vector<int>& stripeIndexs);
 	bool mdr_I_one_dpDisk_fail_bool_m;
 	bool mdr_I_one_dpDisk_fail_bool_v;
 	map<int, vector<vector<int> > > mdr_I_one_dpDisk_fail_nonStripeIndex;
@@ -95,9 +96,6 @@ class CodingLayer {
 	//Add by Dongsheng Wei on Jan. 16, 2014 begin.
 	int decoding_mdr_I(int disk_id, char *buf, long long size,
 				long long offset);
-	int decoding_mdr_I_recover(int disk_id, char *buf, long long size,
-				long long offset, char*** pread_stripes, bool** isInbuf);
-	
 	int decoding_raid5_noRotate(int disk_id, char *buf, long long size,
 				long long offset);
 	int decoding_raid6_noRotate(int disk_id, char *buf, long long size,
@@ -109,6 +107,10 @@ class CodingLayer {
 	 ~CodingLayer();
 	struct data_block_info encode(const char *buf, int size);
 	int decode(int disk_id, char *buf, long long size, long long offset);
+
+	int mdr_I_recover_oneStripeGroup(int disk_id, char *buf, long long size,
+								long long offset, char*** pread_stripes);
+	
 	int mdr_I_get_strip_size(){return strip_size;}
 };
 

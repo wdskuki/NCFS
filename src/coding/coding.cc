@@ -560,11 +560,23 @@ bool CodingLayer::mdr_I_repair_if_blk_in_buf(int disk_id, int stripe_blk_offset,
 									 vector<int>& stripeIndexs){
 	int vec_size = stripeIndexs.size();
 	for(int i = 0; i < vec_size; i++){
-		if((disk_id == stripeIndexs[i]) && (isInbuf[i][stripe_blk_offset] == true)){
+		if((stripe_blk_offset == stripeIndexs[i]) && (isInbuf[i][disk_id] == true)){
 			return true;
 		}
 	}
 	return false;
+}
+
+int CodingLayer::mdr_I_repair_chg_blkIndexOffset_in_buf(int disk_id, int stripe_blk_offset, vector<int>& stripeIndexs){
+
+	int vec_size = stripeIndexs.size();
+	int count = 0;
+	for(int i = 0; i < vec_size; i++){
+		if(stripe_blk_offset == stripeIndexs[i])
+			return count;
+		count++;
+	}
+	return -1;
 }
 
 
@@ -3484,9 +3496,8 @@ int CodingLayer::decoding_mdr_I(int disk_id, char *buf, long long size,
 	return -1;
 }
 
-
-int CodingLayer::decoding_mdr_I_recover(int disk_id, char *buf, long long size,
-				long long offset, char*** pread_stripes, bool** isInbuf)
+int CodingLayer::mdr_I_recover_oneStripeGroup(int disk_id, char *buf, long long size,
+								long long offset, char*** pread_stripes)
 {
 	int retstat;
 	char *temp_buf;
@@ -3576,7 +3587,7 @@ int CodingLayer::decoding_mdr_I_recover(int disk_id, char *buf, long long size,
 
 				//repair the blk in the buf strips
 				for(int i = 0; i < s_size; i++){
-					for(int j = 0; j < disk_total_num; j++){
+					for(int j = 0; j < disk_total_num -1; j++){
 						if(j != disk_id){
 							for(long long j2 = 0; j2 < block_size; j2++){
 								pread_stripes[i][disk_id][j2] ^= pread_stripes[i][j][j2];
@@ -3588,101 +3599,55 @@ int CodingLayer::decoding_mdr_I_recover(int disk_id, char *buf, long long size,
 				}
 
 				//repair other blks in the failed disk
-				
-
-
-
-
-
-				/////////////////////////////////////////////////////////////////////////
-
-
-
-
-
 				set<int> stripeIndexs_set;
 				stripeIndexs_set.insert(
 					mdr_I_one_dpDisk_fail_stripeIndex.begin(), 
 					mdr_I_one_dpDisk_fail_stripeIndex.end()
 					);
 
-				//if the needed blk is in the stripeIndexs
-				if(stripeIndexs_set.find(strip_offset) 
-					!= stripeIndexs_set.end()){
-
-					for(int i = 0; i < disk_total_num-1; i++){
-						if(i != disk_id){
-							retstat = cacheLayer->DiskRead(i, temp_buf, size, offset);
-							for(long long j = 0; j < size; j++){
-								buf[j] = buf[j] ^ temp_buf[j];
-							}
+				for(int i = 0; i < strip_size; i++){
+					if(stripeIndexs_set.find(i) == stripeIndexs_set.end()){
+						vector<vector<int> > iivec = mdr_I_one_dpDisk_fail_nonStripeIndex[i];
+						
+						int iivec_size = iivec.size();
+						if(iivec_size != NCFS_DATA->disk_total_num){
+							printf("error: repair reading blks num\n");
+							exit(1);
 						}
-					}
-				}
-				else{// if the neede blk is not in the stripeIndexs
-					if(mdr_I_one_dpDisk_fail_bool_m == false){
-						mdr_I_one_dpDisk_fail_bool_m = true;
+				
+						int blk_index = i;
 
-						mdr_I_one_dpDisk_fail_nonStripeIndex = 
-								mdr_I_repair_dpDisk_nonstripeIndexs_blocks_no(disk_id, 
-							 							mdr_I_one_dpDisk_fail_stripeIndex);
-					}					
+						for(int j = 0; j < iivec_size; j++){
+						
+						int parcitipant_disk_id = j;
 
-					// cout<<"mdr_I_one_dpDisk_fail_nonStripeIndex\n";
-					// print_ivmap(mdr_I_one_dpDisk_fail_nonStripeIndex, mdr_I_one_dpDisk_fail_stripeIndex);
-
-					vector<vector<int> > iivec = mdr_I_one_dpDisk_fail_nonStripeIndex[strip_offset];
-
-					//cout<<"iivec:\n";
-					//print_iivec(iivec);
-					int iivec_size = iivec.size();
-					//cout<<"iivec_size = "<<iivec_size<<endl;
-
-					if(iivec_size != NCFS_DATA->disk_total_num){
-						printf("error: repair reading blks num\n");
-						exit(1);
-					}
-
-					int debug_count = 0;
-
-					for(int i = 0; i < iivec_size; i++){
-						if(!iivec[i].empty()){	
-							//the needed blk should be repaired firstly
-							if(i == disk_id){
-								int ivec_size = iivec[i].size();
+							if(!iivec[j].empty()){
+								int ivec_size = iivec[j].size();
 								for(int i2 = 0; i2 < ivec_size; i2++){
-									int i2_blk_num = iivec[i][i2]+strip_num*strip_size;
+									int par_disk_blk = mdr_I_repair_chg_blkIndexOffset_in_buf(parcitipant_disk_id,
+																iivec[j][i2], mdr_I_one_dpDisk_fail_stripeIndex);
+									if(par_disk_blk == -1){
+										cout<<"parcitipant_disk_id = "<<parcitipant_disk_id<<endl;
+										printf("iivec[%d][%d] = %d\n", j, i2, iivec[j][i2]);
+										//cout<<"ivec[j][i2] = "<<iivec[j][i2]<<endl;
 
-									for(int ii = 0; ii < disk_total_num-1; ii++){
-										if(ii != i){
-											//printf("debug_count = %d, [disk_id, block_no] = [%d, %d]\n", ++debug_count, ii, i2_blk_num);
-											retstat = cacheLayer->DiskRead(ii, temp_buf, size, i2_blk_num*block_size);
-											for(long long j = 0; j < size; j++){
-												buf[j] = buf[j] ^ temp_buf[j];
-											}
-										}
+										print_ivec(mdr_I_one_dpDisk_fail_stripeIndex);
+										printf("error: par_disk_blk\n");
+										exit(1);				
 									}
+
+									char *src = pread_stripes[par_disk_blk][parcitipant_disk_id];
+									char *des = buf + blk_index*block_size;
+
+									for(long long j2 = 0; j2 < block_size; j2++){
+										des[j2] ^= src[j2];
+									}
+
 								}
 							}
-					
-							//all the needed blks can be read directly
-							if(i != disk_id){
-								int ivec_size = iivec[i].size();
-								for(int ii = 0; ii < ivec_size; ii++){
-									int blk_num = iivec[i][ii]+strip_num * strip_size;
-
-									//printf("debug_count = %d, [disk_id, block_no] = [%d, %d]\n", ++debug_count, i, blk_num);
-		
-									retstat = cacheLayer->DiskRead(i, temp_buf, size, blk_num * block_size);
-
-									for(long long j = 0; j < size; j++){
-										buf[j] = buf[j] ^ temp_buf[j];
-									}
-								}
-							}
-						}
+						}						
 					}
-				}
+				}				
 			}
 			else if(disk_id = disk_total_num - 1){
 				//fail disk(disk_id) is Q disk
@@ -3701,7 +3666,6 @@ int CodingLayer::decoding_mdr_I_recover(int disk_id, char *buf, long long size,
 	AbnormalError();
 	return -1;
 }
-
 
 int CodingLayer::decoding_raid5_noRotate(int disk_id, char *buf, long long size,
 				long long offset)

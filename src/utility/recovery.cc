@@ -113,7 +113,11 @@ int ConventionalRecover(int fail_disk_id){
 }
 
 //Add by Dongsheng Wei on Jan. 20, 2014 begin.
-int mdr_I_recover(int fail_disk_id){
+
+
+
+
+int mdr_I_recover_one_disk(int fail_disk_id){
 	  	
 	  	printf("debug: mdr_I_recover()\n");
 
@@ -146,33 +150,28 @@ int mdr_I_recover(int fail_disk_id){
 	    	pread_stripes[i] = (char **)malloc(sizeof(char* )* disk_total_num);
 	    	for(int j = 0; j < disk_total_num; j++){
 	    		pread_stripes[i][j] = (char *)malloc(sizeof(char)* block_size);
-	    		memset(pread_stripes[i][j], 0, block_size);
+	    		//memset(pread_stripes[i][j], 0, block_size);
 	    	}
 	    }
 
-	    bool** isInbuf;
-	    isInbuf = (bool **)malloc(sizeof(bool**)*r);
-	    for(int i = 0; i < r; i++){
-	    	isInbuf[i] = (bool *)malloc(sizeof(bool*)*disk_total_num);
-	    	for(int j = 0; j < disk_total_num; j++){
-	    		isInbuf[i][j] = false;
-	    	}
-	    }
+	    // int r = strip_size / 2;
+	    // char pread_stripes[r][disk_total_num][block_size];
 		
-	    for(int i = 0; i < __recoversize; i -= strip_size){
+	    for(int i = 0; i < __recoversize; i += strip_size){
+		    for(int i = 0; i < r; i++){
+		    	for(int j = 0; j < disk_total_num; j++){
+		    		memset(pread_stripes[i][j], 0, block_size);
+		    	}
+		    }
 
-	    	// printf("i = %d\n", i);
+		    long long offset = i * block_size;
 
-		    // int block_size = NCFS_DATA->chunk_size;
-		    // int offset = i * block_size;
-		    // //(bug@@)char *buf = (char*)calloc(block_size,0);
-		    // char buf[block_size];
-		    // int retstat = fileSystemLayer->codingLayer->decode(fail_disk_id,buf,block_size,offset);
+		    long long buf_size = strip_size * block_size;
+		    char buf[buf_size];
 
-		    // retstat = cacheLayer->DiskWrite(fail_disk_id,buf,block_size,offset);
-
-
-
+		    int retstat = fileSystemLayer->codingLayer->mdr_I_recover_oneStripeGroup(fail_disk_id, 
+		    												buf, buf_size, offset, pread_stripes);
+		    retstat = cacheLayer->DiskWrite(fail_disk_id,buf,strip_size*block_size,offset);
 	    }
 	    
 	    for(int i = 0; i < r; i++){
@@ -182,11 +181,6 @@ int mdr_I_recover(int fail_disk_id){
 	    	free(pread_stripes[i]);
 	    }
 	    free(pread_stripes);	    
-
-	    for(int i = 0; i < r; i++){
-	    	free(isInbuf[i]);
-	    }
-	    free(isInbuf);
 
 
 	    //NCFS_DATA->disk_status[fail_disk_id] = 0;
@@ -229,7 +223,7 @@ void RecoveryTool::recover(){
 		if (fail_disk_num == 1){
 			//Add by Dongsheng Wei on Jan. 20, 2014 begin.
 			if(coding_type == 5000){
-				mdr_I_recover(fail_disk_id);
+				mdr_I_recover_one_disk(fail_disk_id);
 			}
 			//Add by Dongsheng Wei on Jan. 20, 2014 end.
 			else{
