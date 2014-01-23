@@ -119,7 +119,7 @@ int ConventionalRecover(int fail_disk_id){
 
 int mdr_I_recover_one_disk(int fail_disk_id){
 	  	
-	  	printf("debug: mdr_I_recover()\n");
+	  	//printf("debug: mdr_I_recover()\n");
 
 
 	    NCFS_DATA->process_state = 1;

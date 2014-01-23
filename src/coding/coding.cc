@@ -3581,6 +3581,15 @@ int CodingLayer::mdr_I_recover_oneStripeGroup(int disk_id, char *buf, long long 
 					for(int j = 0; j < disk_total_num; j++){
 						if(j != disk_id){
 							retstat = cacheLayer->DiskRead(j, pread_stripes[i][j], block_size, blk_num*block_size);
+
+							  // FILE * pFile;
+							  // char filename[50];
+							  // sprintf(filename, "./wds/pread_stripe_%d_%d", i, j);
+							  // pFile = fopen(filename, "wb");
+							  // fwrite (pread_stripes[i][j], sizeof(char), 
+							  // 					block_size, pFile);
+							  // fclose (pFile);
+
 						}
 					}
 				}
@@ -3595,7 +3604,33 @@ int CodingLayer::mdr_I_recover_oneStripeGroup(int disk_id, char *buf, long long 
 						}
 					}
 					int buf_offset = mdr_I_one_dpDisk_fail_stripeIndex[i];
-					strncpy(buf+buf_offset*block_size, pread_stripes[i][disk_id], block_size);
+
+					//cout<<"buf_offset*block_size = "<<buf_offset*block_size<<endl;
+
+					// if(i == 0){
+					// 	FILE * pFile;
+					//     char filename[50];
+					// 	sprintf(filename, "./wds/pread_stripe");
+					// 	pFile = fopen(filename, "wb");
+					// 	fwrite (pread_stripes[i][disk_id], sizeof(char), 
+					// 							block_size, pFile);
+					// 	fclose (pFile);
+					// }
+					
+					//strcpy(buf+(buf_offset*block_size), pread_stripes[i][disk_id]);
+					for(long long j2 = 0; j2 < block_size; j2++){
+						*(buf+(buf_offset*block_size+j2)) = pread_stripes[i][disk_id][j2];
+					}
+
+					// if(i == 0){
+					// 	FILE * pFile;
+					//     char filename[50];
+					// 	sprintf(filename, "./wds/buf");
+					// 	pFile = fopen(filename, "wb");
+					// 	fwrite (buf, sizeof(char), block_size, pFile);
+					// 	fclose (pFile);
+					// }				
+
 				}
 
 				//repair other blks in the failed disk
