@@ -23,7 +23,6 @@ fusermount -u mountdir
 rm file0*.img
 rm -r rootdir
 rm -r mountdir
-[ "$1" -gt 7 ] && echo "Too many disks, support up to 7 disks" && exit 0
 mkdir rootdir
 mkdir mountdir
 for((i=1;i<$1+1;i=i+1))

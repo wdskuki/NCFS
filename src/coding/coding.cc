@@ -1240,6 +1240,12 @@ struct data_block_info CodingLayer::encoding_raid6(const char *buf, int size)
 			gettimeofday(&t2, NULL);
 		}
 
+		duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+		NCFS_DATA->diskwrite_time += duration;
+
+
+
+
 		code_disk_id = disk_total_num - 1 - (block_no % disk_total_num);
 		parity_disk_id =
 		    disk_total_num - 1 - ((block_no + 1) % disk_total_num);
@@ -1260,6 +1266,11 @@ struct data_block_info CodingLayer::encoding_raid6(const char *buf, int size)
 				if (NCFS_DATA->run_experiment == 1) {
 					gettimeofday(&t2, NULL);
 				}
+
+				duration = (t2.tv_sec - t1.tv_sec) +
+						   (t2.tv_usec - t1.tv_usec) / 1000000.0;
+				NCFS_DATA->diskread_time += duration;
+
 
 				for (j = 0; j < size_request; j++) {
 					//Calculate parity block P
@@ -1316,6 +1327,9 @@ struct data_block_info CodingLayer::encoding_raid6(const char *buf, int size)
 		if (NCFS_DATA->run_experiment == 1) {
 			gettimeofday(&t2, NULL);
 		}
+
+		duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+		NCFS_DATA->diskwrite_time += duration;
 
 		free(buf_read);
 		free(buf2);
@@ -2524,6 +2538,12 @@ int CodingLayer::decoding_raid6(int disk_id, char *buf, long long size,
 			gettimeofday(&t2, NULL);
 		}
 
+		duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+		NCFS_DATA->diskwrite_time += duration;
+
+
+
+
 		free(temp_buf);
 		free(P_temp);
 		free(Q_temp);
@@ -2565,6 +2585,10 @@ int CodingLayer::decoding_raid6(int disk_id, char *buf, long long size,
 					if (NCFS_DATA->run_experiment == 1) {
 						gettimeofday(&t2, NULL);
 					}
+
+					duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+					NCFS_DATA->diskread_time += duration;
+
 
 					for (j = 0;
 					     j <
@@ -2609,6 +2633,10 @@ int CodingLayer::decoding_raid6(int disk_id, char *buf, long long size,
 					if (NCFS_DATA->run_experiment == 1) {
 						gettimeofday(&t2, NULL);
 					}
+
+					duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+					NCFS_DATA->diskread_time += duration;
+
 
 					for (j = 0; j < size; j++) {
 						//calculate the coefficient of the data block
@@ -2678,6 +2706,12 @@ int CodingLayer::decoding_raid6(int disk_id, char *buf, long long size,
 						    1) {
 							gettimeofday(&t2, NULL);
 						}
+
+						duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+						NCFS_DATA->diskread_time += duration;
+						
+
+
 						//calculate the coefficient of the data block
 						data_disk_coeff = i;
 
@@ -2735,6 +2769,10 @@ int CodingLayer::decoding_raid6(int disk_id, char *buf, long long size,
 				if (NCFS_DATA->run_experiment == 1) {
 					gettimeofday(&t2, NULL);
 				}
+
+				duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+				NCFS_DATA->diskread_time += duration;
+
 
 				for (j = 0; j < size; j++) {
 					buf[j] = buf[j] ^ temp_buf[j];
@@ -2802,6 +2840,10 @@ int CodingLayer::decoding_raid6(int disk_id, char *buf, long long size,
 							gettimeofday(&t2, NULL);
 						}
 
+						duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+						NCFS_DATA->diskread_time += duration;
+
+
 						for (j = 0;
 						     j <
 						     (long long)(size *
@@ -2862,6 +2904,10 @@ int CodingLayer::decoding_raid6(int disk_id, char *buf, long long size,
 							gettimeofday(&t2, NULL);
 						}
 
+						duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+						NCFS_DATA->diskread_time += duration;
+
+
 						for (j = 0;
 						     j <
 						     (long long)(size *
@@ -2916,6 +2962,11 @@ int CodingLayer::decoding_raid6(int disk_id, char *buf, long long size,
 								gettimeofday
 								    (&t2, NULL);
 							}
+
+						duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+						NCFS_DATA->diskread_time += duration;
+
+												
 						} else {	//use the recovered D
 							for (j = 0; j < size;
 							     j++) {

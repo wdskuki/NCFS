@@ -102,7 +102,8 @@ int ConventionalRecover(int fail_disk_id){
 	    duration = endtime.tv_sec - starttime.tv_sec + (endtime.tv_usec-starttime.tv_usec)/1000000.0;
 	    data_size  = __recoversize * (NCFS_DATA->chunk_size) / (1024 * 1024);
 	    
-	    printf("Elapsed Time = %fs\n", duration);
+	    //printf("Elapsed Time = %fs\n", duration);
+	    printf("Elapsed Time = %f\n", duration);
 	    printf("Repair Throughput = %f MB/s\n", (float)(data_size / duration));
 	    printf("Storage Node Size = %f MB\n", (float)data_size);
 	    printf("Block Size = %d B\n", NCFS_DATA->chunk_size);
@@ -193,7 +194,8 @@ int mdr_I_recover_one_disk(int fail_disk_id){
 	    duration = endtime.tv_sec - starttime.tv_sec + (endtime.tv_usec-starttime.tv_usec)/1000000.0;
 	    data_size  = __recoversize * (NCFS_DATA->chunk_size) / (1024 * 1024);
 	    
-	    printf("Elapsed Time = %fs\n", duration);
+	    //printf("Elapsed Time = %fs\n", duration);
+	    printf("Elapsed Time = %f\n", duration);
 	    printf("Repair Throughput = %f MB/s\n", (float)(data_size / duration));
 	    printf("Storage Node Size = %f MB\n", (float)data_size);
 	    printf("Block Size = %d B\n", NCFS_DATA->chunk_size);
