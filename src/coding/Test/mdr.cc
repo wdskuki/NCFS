@@ -287,8 +287,8 @@ map<int, vector<vector<int> > > mdr_I_repair_dpDisk_nonstripeIndexs_blocks_no(in
 		vector<vector<int> > iivec;
 		int fail_disk_block_no = -1;
 		for(int j = 0; j < col; j++){
-			int val = matrixB[stripeIndexs[i]*col+j];
-			//cout<<"val = "<<val<<endl;
+			long long val = matrixB[stripeIndexs[i]*col+j];
+			cout<<"val = "<<val<<endl;
 			//bool flag = true;
 			vector<int> ivec; 
 			for(int t = 0; t < strip_size; t++){
@@ -401,7 +401,7 @@ int main(int argc, char const *argv[])
 	vector<vector<int> > iivec;
 	map<int, vector<vector<int> > > ivmap;
 
-	k = 3;
+	k = 5;
 	strip_size = (int)pow(2, k);
 
 	matrixB = mdr_I_encoding_matrix(k);
@@ -420,13 +420,13 @@ int main(int argc, char const *argv[])
 		}
 	}
 
-	cout<<"------"<<endl;
+	cout<<"---iivec---"<<endl;
 	for(int i = 0; i < strip_size; i++){
 		vector<vector<int> > iivec = mdr_I_repair_qDisk_blocks_id(i);
 		print_iivec(iivec);
 	}
 
-	cout<<"------"<<endl;
+	cout<<"---ivmap---"<<endl;
 	ivec = mdr_I_repair_dpDisk_stripeIndexs(fail_disk_id, k);
 	print_ivec(ivec);
 	ivmap = mdr_I_repair_dpDisk_nonstripeIndexs_blocks_no(fail_disk_id, ivec);
