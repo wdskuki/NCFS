@@ -1477,6 +1477,7 @@ void ncfs_usage()
 	abort();
 }
 
+
 int main(int argc, char *argv[])
 {
 	int i;
@@ -1581,7 +1582,7 @@ int main(int argc, char *argv[])
 	} else {
 		ncfs_data->segment_size = 1;
 	}
-
+	
 	fileSystemLayer->get_disk_status(ncfs_data);	
 
 	fileSystemLayer->get_operation_mode(ncfs_data);	
